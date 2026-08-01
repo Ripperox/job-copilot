@@ -195,7 +195,7 @@ a {
 .health-on {
   background: var(--green-bg);
   color: var(--green);
-  border-color: rgba(63, 185, 80, 0.3);
+  border-color: rgba(0, 255, 157, 0.3);
 }
 
 .health-heuristic {
@@ -359,7 +359,7 @@ a {
 .btn-applied {
   background: var(--green-bg);
   color: var(--green);
-  border-color: rgba(63, 185, 80, 0.3);
+  border-color: rgba(0, 255, 157, 0.3);
 }
 
 .btn-sm {
@@ -402,7 +402,7 @@ a {
 .banner-ok {
   background: var(--green-bg);
   color: var(--green);
-  border-color: rgba(63, 185, 80, 0.3);
+  border-color: rgba(0, 255, 157, 0.3);
 }
 
 /* ---------- Dashboard toolbar ---------- */
@@ -585,7 +585,7 @@ a {
   border-radius: 6px;
   background: var(--accent-dim);
   color: var(--accent);
-  border: 1px solid rgba(63, 185, 80, 0.25);
+  border: 1px solid rgba(0, 255, 157, 0.25);
 }
 
 .pill-muted {
