@@ -1,24 +1,70 @@
+/* =============================================================================
+   Job Copilot — dark developer theme
+   A restyle only: every class name and all behavior is preserved from the
+   original stylesheet; only the visual layer changed.
+
+   Palette
+   -------
+   --bg            #0b0d0f   page background (near-black, layered base)
+   --surface       #14171a   cards / raised surfaces
+   --surface-2     #0e1114   inset surfaces (inputs, textareas, list rows)
+   --border        #23272c   default 1px hairline border
+   --border-strong #2e343b   stronger border for controls
+   --text          #e6e9ec   primary off-white text
+   --text-muted    #8b949e   secondary / muted text
+   --accent        #3fb950   the single accent — terminal green
+   --accent-hover  #4ac25b   accent hover
+   --accent-dim    rgba tint of accent for fills / focus rings
+   --on-accent     #08130b   dark text placed on top of the accent
+
+   Per-status tokens (legible on dark):
+   new       grey    #9aa4af
+   outreach  amber   #d6a02a
+   applied   blue    #5aa2ff
+   interview green    #3fb950
+   rejected  red     #e5695f  (muted)
+   ============================================================================= */
+
 :root {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --border: #e4e7ec;
-  --border-strong: #d0d5dd;
-  --text: #1d2433;
-  --text-muted: #667085;
-  --accent: #2f5bd7;
-  --accent-hover: #2749ad;
-  --green: #16a34a;
-  --green-bg: #e7f6ec;
-  --amber: #b45309;
-  --amber-bg: #fdf1dd;
-  --grey: #667085;
-  --grey-bg: #eef0f3;
-  --red: #b42318;
-  --red-bg: #fdecea;
-  --radius: 10px;
-  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
+  /* Surfaces — apeing/AlphaRooms black scale */
+  --bg: #09090b;
+  --surface: #131315;
+  --surface-2: #0c0c0e;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: #2c2c2e;
+
+  /* Text */
+  --text: #ededf0;
+  --text-muted: #8a8a90;
+
+  /* Accent — AlphaRooms neon green (+ glow) */
+  --accent: #00ff9d;
+  --accent-hover: #33ffb0;
+  --accent-dim: rgba(0, 255, 157, 0.14);
+  --accent-ring: rgba(0, 255, 157, 0.3);
+  --on-accent: #05140c;
+  --glow: 0 4px 16px rgba(0, 255, 157, 0.28);
+
+  /* Status hues (apeing secondary palette) */
+  --green: #3fdfbe;
+  --green-bg: rgba(63, 223, 190, 0.13);
+  --amber: #d8b14a;
+  --amber-bg: rgba(216, 177, 74, 0.13);
+  --grey: #8a8a90;
+  --grey-bg: rgba(138, 138, 144, 0.12);
+  --blue: #57a5df;
+  --blue-bg: rgba(87, 165, 223, 0.13);
+  --red: #ef4444;
+  --red-bg: rgba(239, 68, 68, 0.13);
+
+  --radius: 8px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  --font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Roboto Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  font-family: var(--font-sans);
+  color-scheme: dark;
 }
 
 * {
@@ -34,8 +80,9 @@ body {
 body {
   background: var(--bg);
   color: var(--text);
-  line-height: 1.5;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 h1,
@@ -43,14 +90,24 @@ h2,
 h3 {
   margin: 0 0 0.4rem;
   line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
 p {
   margin: 0 0 0.5rem;
 }
 
+a {
+  color: var(--accent);
+}
+
 .muted {
   color: var(--text-muted);
+}
+
+::selection {
+  background: var(--accent-dim);
+  color: var(--text);
 }
 
 /* ---------- Layout ---------- */
@@ -65,6 +122,7 @@ p {
   padding: 0.75rem 1.5rem;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -74,7 +132,9 @@ p {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-weight: 700;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .brand-mark {
@@ -82,7 +142,7 @@ p {
 }
 
 .brand-name {
-  letter-spacing: -0.01em;
+  color: var(--text);
 }
 
 .tabs {
@@ -95,21 +155,23 @@ p {
   background: transparent;
   color: var(--text-muted);
   padding: 0.4rem 0.85rem;
-  border-radius: 8px;
-  font-size: 0.95rem;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .tab:hover {
-  background: var(--grey-bg);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text);
 }
 
 .tab-active,
 .tab-active:hover {
-  background: var(--accent);
-  color: #fff;
+  background: var(--accent-dim);
+  color: var(--accent);
 }
 
 .health {
@@ -120,10 +182,11 @@ p {
 }
 
 .health-chip {
+  font-family: var(--font-mono);
   font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.2rem 0.5rem;
-  border-radius: 999px;
+  font-weight: 500;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
   border: 1px solid var(--border);
   white-space: nowrap;
 }
@@ -132,26 +195,26 @@ p {
 .health-on {
   background: var(--green-bg);
   color: var(--green);
-  border-color: transparent;
+  border-color: rgba(63, 185, 80, 0.3);
 }
 
 .health-heuristic {
   background: var(--amber-bg);
   color: var(--amber);
-  border-color: transparent;
+  border-color: rgba(214, 160, 42, 0.3);
 }
 
 .health-off,
 .health-muted {
   background: var(--grey-bg);
   color: var(--grey);
-  border-color: transparent;
+  border-color: var(--border);
 }
 
 .health-down {
   background: var(--red-bg);
   color: var(--red);
-  border-color: transparent;
+  border-color: rgba(229, 105, 95, 0.3);
 }
 
 .content {
@@ -188,8 +251,11 @@ p {
 }
 
 .field-label {
-  font-weight: 600;
-  font-size: 0.9rem;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  color: var(--text);
 }
 
 .hint {
@@ -201,24 +267,33 @@ p {
 .textarea {
   width: 100%;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 0.55rem 0.7rem;
   font: inherit;
   color: var(--text);
-  background: #fff;
+  background: var(--surface-2);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 .input:focus,
 .textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(47, 91, 215, 0.12);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .textarea {
   resize: vertical;
   min-height: 140px;
   line-height: 1.5;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
 }
 
 .input-select {
@@ -232,7 +307,7 @@ p {
   font-weight: 600;
   font-size: 0.9rem;
   padding: 0.5rem 0.9rem;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid transparent;
   cursor: pointer;
   text-decoration: none;
@@ -240,30 +315,35 @@ p {
   align-items: center;
   gap: 0.35rem;
   line-height: 1.2;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: default;
 }
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
+  font-weight: 700;
+  box-shadow: var(--glow);
 }
 
 .btn-primary:not(:disabled):hover {
   background: var(--accent-hover);
+  box-shadow: 0 6px 22px rgba(0, 255, 157, 0.4);
 }
 
 .btn-outline {
-  background: #fff;
+  background: transparent;
   color: var(--text);
   border-color: var(--border-strong);
 }
 
 .btn-outline:not(:disabled):hover {
-  background: var(--grey-bg);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .btn-ghost {
@@ -273,13 +353,13 @@ p {
 }
 
 .btn-ghost:hover {
-  background: var(--grey-bg);
+  background: var(--accent-dim);
 }
 
 .btn-applied {
   background: var(--green-bg);
   color: var(--green);
-  border-color: transparent;
+  border-color: rgba(63, 185, 80, 0.3);
 }
 
 .btn-sm {
@@ -295,16 +375,18 @@ p {
 
 .saved-note {
   color: var(--green);
+  font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 /* ---------- Banners ---------- */
 .banner {
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 0.6rem 0.85rem;
   font-size: 0.88rem;
   margin: 0 0 0.75rem;
+  border: 1px solid transparent;
 }
 
 .banner-tight {
@@ -314,11 +396,13 @@ p {
 .banner-error {
   background: var(--red-bg);
   color: var(--red);
+  border-color: rgba(229, 105, 95, 0.3);
 }
 
 .banner-ok {
   background: var(--green-bg);
   color: var(--green);
+  border-color: rgba(63, 185, 80, 0.3);
 }
 
 /* ---------- Dashboard toolbar ---------- */
@@ -333,7 +417,8 @@ p {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
   color: var(--text-muted);
 }
 
@@ -353,12 +438,16 @@ p {
 }
 
 .job-card {
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, transform 0.15s ease;
   border-left: 3px solid var(--border);
 }
 
+.job-card:hover {
+  border-color: var(--border-strong);
+}
+
 .job-card-new {
-  border-left-color: var(--border-strong);
+  border-left-color: var(--grey);
 }
 
 .job-card-outreach {
@@ -366,7 +455,7 @@ p {
 }
 
 .job-card-applied {
-  border-left-color: var(--accent);
+  border-left-color: var(--blue);
 }
 
 .job-card-interview {
@@ -387,40 +476,51 @@ p {
   flex: 0 0 auto;
   width: 58px;
   height: 58px;
-  border-radius: 10px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  font-family: var(--font-mono);
   font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
 }
 
 .score-num {
+  font-family: var(--font-mono);
   font-size: 1.35rem;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .score-word {
-  font-size: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  opacity: 0.8;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+  margin-top: 0.15rem;
 }
 
 .score-green {
-  background: var(--green-bg);
-  color: var(--green);
+  color: var(--accent);
+  border-color: rgba(0, 255, 157, 0.4);
+  background: var(--accent-dim);
+  box-shadow: var(--glow);
 }
 
 .score-amber {
-  background: var(--amber-bg);
   color: var(--amber);
+  border-color: rgba(214, 160, 42, 0.3);
+  background: var(--amber-bg);
 }
 
 .score-grey {
-  background: var(--grey-bg);
-  color: var(--grey);
+  color: var(--text-muted);
+  border-color: var(--border);
+  background: var(--surface-2);
 }
 
 .job-title-block {
@@ -447,12 +547,13 @@ p {
 }
 
 .job-salary {
+  font-family: var(--font-mono);
   font-weight: 600;
   color: var(--green);
 }
 
 .dot {
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .job-reason {
@@ -477,17 +578,20 @@ p {
 }
 
 .pill {
-  font-size: 0.74rem;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
   padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(47, 91, 215, 0.1);
+  border-radius: 6px;
+  background: var(--accent-dim);
   color: var(--accent);
+  border: 1px solid rgba(63, 185, 80, 0.25);
 }
 
 .pill-muted {
   background: var(--grey-bg);
   color: var(--grey);
+  border-color: var(--border);
 }
 
 .job-actions {
@@ -519,8 +623,10 @@ p {
 }
 
 .outreach-heading {
-  font-weight: 700;
-  font-size: 0.95rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
 }
 
 .outreach-field {
@@ -537,8 +643,11 @@ p {
 }
 
 .outreach-label {
-  font-weight: 600;
-  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
@@ -562,9 +671,9 @@ p {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.45rem 0.65rem;
-  background: var(--bg);
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .outreach-target-title {
@@ -585,8 +694,8 @@ p {
 }
 
 .status-applied {
-  --st-fg: var(--accent);
-  --st-bg: rgba(47, 91, 215, 0.12);
+  --st-fg: var(--blue);
+  --st-bg: var(--blue-bg);
 }
 
 .status-interview {
@@ -620,17 +729,22 @@ p {
 }
 
 .summary-total-num {
+  font-family: var(--font-mono);
   font-size: 1.5rem;
   font-weight: 700;
   line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .summary-total-label {
-  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
+  margin-top: 0.25rem;
 }
 
 .summary-chips {
@@ -643,22 +757,25 @@ p {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
   padding: 0.25rem 0.5rem 0.25rem 0.6rem;
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--st-bg);
   color: var(--st-fg);
+  border: 1px solid transparent;
 }
 
 .summary-chip-count {
   min-width: 1.35rem;
   text-align: center;
-  background: var(--surface);
+  background: rgba(0, 0, 0, 0.35);
   color: var(--st-fg);
-  border-radius: 999px;
+  border-radius: 5px;
   padding: 0 0.35rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Status filter tabs ---------- */
@@ -673,31 +790,33 @@ p {
   background: var(--surface);
   color: var(--text-muted);
   padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .status-tab:hover {
-  background: var(--grey-bg);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text);
 }
 
 .status-tab-count {
   font-size: 0.75rem;
   opacity: 0.75;
+  font-variant-numeric: tabular-nums;
 }
 
 .status-tab-active,
 .status-tab-active:hover {
-  background: var(--st-bg, var(--accent));
-  color: var(--st-fg, #fff);
-  border-color: transparent;
+  background: var(--st-bg, var(--accent-dim));
+  color: var(--st-fg, var(--accent));
+  border-color: color-mix(in srgb, var(--st-fg, var(--accent)) 40%, transparent);
 }
 
 /* ---------- Card status control ---------- */
@@ -705,15 +824,16 @@ p {
   flex: 0 0 auto;
   margin-left: auto;
   align-self: flex-start;
-  font-size: 0.68rem;
-  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
   padding: 0.2rem 0.55rem;
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--st-bg);
   color: var(--st-fg);
   white-space: nowrap;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
 }
 
 .status-control {
@@ -724,16 +844,16 @@ p {
 }
 
 .status-btn {
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 500;
   padding: 0.3rem 0.6rem;
-  border-radius: 999px;
+  border-radius: 6px;
   border: 1px solid var(--border-strong);
-  background: var(--surface);
+  background: var(--surface-2);
   color: var(--text-muted);
   cursor: pointer;
-  transition: border-color 0.12s ease, color 0.12s ease;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
 
 .status-btn:hover:not(:disabled) {
@@ -743,14 +863,14 @@ p {
 
 .status-btn:disabled {
   cursor: default;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 .status-btn-active,
 .status-btn-active:hover {
   background: var(--st-bg);
   color: var(--st-fg);
-  border-color: transparent;
+  border-color: color-mix(in srgb, var(--st-fg) 40%, transparent);
 }
 
 /* ---------- Card notes ---------- */
@@ -768,8 +888,11 @@ p {
 }
 
 .notes-label {
-  font-weight: 600;
-  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
@@ -810,6 +933,14 @@ p {
 .empty p {
   max-width: 460px;
   margin: 0 auto;
+}
+
+/* ---------- Motion preferences ---------- */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 @media (max-width: 560px) {
