@@ -1050,3 +1050,122 @@ a {
   background: var(--red-bg);
   border-color: var(--red);
 }
+
+/* ---- BYOK key settings ---- */
+
+.key-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.key-chip {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-ring);
+  color: var(--accent);
+}
+
+.key-form {
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.key-form .input {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.link {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.link:hover {
+  border-bottom-color: var(--accent);
+}
+
+/* ---- signed-out demo job ---- */
+
+.demo-block {
+  margin-top: 1.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.demo-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.demo-job {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+}
+
+.demo-job-head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.demo-score {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 700;
+  min-width: 2.6rem;
+  height: 2.6rem;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--grey-bg);
+  color: var(--text-muted);
+}
+
+.demo-score-high {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.demo-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.demo-company {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-top: 0.15rem;
+}
+
+.demo-reason {
+  margin: 0.75rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  font-style: italic;
+}
+
+.demo-foot {
+  margin: 0.85rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.hint-inline {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}

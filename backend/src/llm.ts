@@ -2,9 +2,13 @@ import { Config } from './config';
 
 export type LLMProvider = 'gemini' | 'groq' | 'anthropic' | 'heuristic';
 
+// Groq is preferred over Gemini on measured free-tier capacity (2026-08-03):
+// Groq llama-3.3-70b allows ~1000 requests/day, while Gemini's free tier is
+// ~20 requests/day on gemini-3.6-flash and 0 on the older 2.0 models. Scoring a
+// job pool needs hundreds of calls a day, so Groq is the only workable default.
 export function llmProvider(config: Config): LLMProvider {
-  if (config.geminiApiKey) return 'gemini';
   if (config.groqApiKey) return 'groq';
+  if (config.geminiApiKey) return 'gemini';
   if (config.anthropicApiKey) return 'anthropic';
   return 'heuristic';
 }
@@ -16,8 +20,8 @@ export function hasLLM(config: Config): boolean {
 // Send a single-user-message prompt to the configured LLM and return its text.
 // Prefers Gemini (free, generous quota), then Groq, then Anthropic. Throws if none set.
 export async function llmComplete(prompt: string, config: Config, maxTokens = 500): Promise<string> {
-  if (config.geminiApiKey) return geminiComplete(prompt, config, maxTokens);
   if (config.groqApiKey) return groqComplete(prompt, config, maxTokens);
+  if (config.geminiApiKey) return geminiComplete(prompt, config, maxTokens);
   if (config.anthropicApiKey) return anthropicComplete(prompt, config, maxTokens);
   throw new Error('No LLM configured');
 }

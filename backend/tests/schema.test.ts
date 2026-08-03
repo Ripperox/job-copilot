@@ -12,7 +12,9 @@ describe('schema', () => {
       `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`,
     );
     const names = rows.map((r) => r.table_name).sort();
-    expect(names).toEqual(['job_meta', 'jobs', 'outreach', 'profiles', 'scores', 'users'].sort());
+    expect(names).toEqual(
+      ['demo_score', 'job_meta', 'jobs', 'outreach', 'profiles', 'scores', 'user_keys', 'users'].sort(),
+    );
   });
 
   it('is idempotent — applying twice does not throw', async () => {

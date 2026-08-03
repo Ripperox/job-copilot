@@ -266,6 +266,68 @@ export const db = {
     );
   },
 
+  // ---- bring-your-own-key (encrypted at rest) ----
+
+  async setUserKey(
+    userId: string,
+    encrypted: string,
+    mask: string,
+    provider: 'groq' | 'gemini' | 'anthropic',
+  ): Promise<void> {
+    await query(
+      `INSERT INTO user_keys (user_id, gemini_key_enc, gemini_key_mask, provider, updated_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (user_id) DO UPDATE SET
+         gemini_key_enc = EXCLUDED.gemini_key_enc,
+         gemini_key_mask = EXCLUDED.gemini_key_mask,
+         provider = EXCLUDED.provider,
+         updated_at = now()`,
+      [userId, encrypted, mask, provider],
+    );
+  },
+
+  // Returns the still-encrypted blob; decryption happens in the caller so the
+  // plaintext key exists only for the duration of one LLM call.
+  async getUserKeyRecord(
+    userId: string,
+  ): Promise<{ encrypted: string; mask: string; provider: 'groq' | 'gemini' | 'anthropic' } | undefined> {
+    const { rows } = await query<{
+      gemini_key_enc: string;
+      gemini_key_mask: string;
+      provider: 'groq' | 'gemini' | 'anthropic';
+    }>(
+      'SELECT gemini_key_enc, gemini_key_mask, provider FROM user_keys WHERE user_id = $1',
+      [userId],
+    );
+    return rows.length
+      ? { encrypted: rows[0].gemini_key_enc, mask: rows[0].gemini_key_mask, provider: rows[0].provider }
+      : undefined;
+  },
+
+  async deleteUserKey(userId: string): Promise<void> {
+    await query('DELETE FROM user_keys WHERE user_id = $1', [userId]);
+  },
+
+  // ---- the cached one-job demo ----
+
+  async setDemoScore(jobId: string, score: number, reason: string, cvVariant: string): Promise<void> {
+    await query('DELETE FROM demo_score');
+    await query(
+      `INSERT INTO demo_score (job_id, score, reason, cv_variant) VALUES ($1,$2,$3,$4)`,
+      [jobId, score, reason, cvVariant],
+    );
+  },
+
+  async getDemoJob(): Promise<ScoredJob | undefined> {
+    const { rows } = await query<ScoredJobRow>(
+      `SELECT j.*, d.score, d.reason, d.cv_variant,
+              NULL::text AS status, NULL::text AS notes, NULL::boolean AS dismissed
+       FROM demo_score d JOIN jobs j ON j.id = d.job_id
+       LIMIT 1`,
+    );
+    return rows.length ? toScoredJob(rows[0]) : undefined;
+  },
+
   // ---- joined dashboard reads ----
 
   async scoredJobs(userId: string): Promise<ScoredJob[]> {
