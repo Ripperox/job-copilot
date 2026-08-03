@@ -1,4 +1,6 @@
-import { db } from './db';
+import { db, LOCAL_USER_ID } from './db';
+import { applySchema } from './db/migrate';
+import { closePool } from './db/pool';
 import { Profile } from './types';
 
 // Seeds Rishit's profile into the local store. Run once with `npm run seed`.
@@ -49,10 +51,19 @@ Blockchain: Substrate, Polkadot, Solidity, Ethereum.`,
   cvVariants: ['Backend', 'AI', 'Blockchain'],
 };
 
-db.setProfile(profile);
-console.log('Seeded profile for', 'Rishit Dhote');
-console.log('  roles:', profile.roles.join(', '));
-console.log('  locations:', profile.locations.join(', '));
-console.log('  must-haves:', profile.mustHaves.join(', '));
-console.log('  CV variants:', profile.cvVariants.join(', '));
-console.log('\nStart the servers and open the dashboard — your profile is ready.');
+async function main() {
+  await applySchema();
+  await db.ensureUser(LOCAL_USER_ID, 'local@jobcopilot', 'Local User');
+  await db.setProfile(LOCAL_USER_ID, profile);
+
+  console.log('Seeded profile for', 'Rishit Dhote');
+  console.log('  roles:', profile.roles.join(', '));
+  console.log('  locations:', profile.locations.join(', '));
+  console.log('  must-haves:', profile.mustHaves.join(', '));
+  console.log('  CV variants:', profile.cvVariants.join(', '));
+  console.log('\nStart the servers and open the dashboard — your profile is ready.');
+}
+
+main()
+  .catch((e) => { console.error('Seed failed:', e); process.exitCode = 1; })
+  .finally(closePool);
