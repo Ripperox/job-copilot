@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Profile } from '../api'
 import { UnauthorizedError, deleteAccount, getProfile, saveProfile } from '../api'
+import KeySettings from './KeySettings'
 
 const EMPTY: Profile = {
   resumeText: '',
@@ -224,6 +225,8 @@ export default function ProfileView({
           {saved && <span className="saved-note">Saved ✓</span>}
         </div>
       </div>
+
+      <KeySettings onUnauthorized={onUnauthorized} />
 
       <div className="card">
         <h2>Danger zone</h2>

@@ -144,6 +144,38 @@ export function deleteAccount(): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>('/auth/account', { method: 'DELETE' })
 }
 
+// ---- bring-your-own-key ----
+
+export interface KeyStatus {
+  hasKey: boolean
+  // A mask like "gsk_a…9fQz". The raw key is never sent back to the browser.
+  mask: string | null
+  // Inferred server-side from the key prefix.
+  provider: 'groq' | 'gemini' | 'anthropic' | null
+}
+
+export function getKeyStatus(): Promise<KeyStatus> {
+  return request<KeyStatus>('/key')
+}
+
+// The server validates the key against Gemini before storing it, so a 400 here
+// means the key itself was rejected.
+export function saveKey(apiKey: string): Promise<KeyStatus> {
+  return request<KeyStatus>('/key', {
+    method: 'PUT',
+    body: JSON.stringify({ apiKey }),
+  })
+}
+
+export function deleteKey(): Promise<KeyStatus> {
+  return request<KeyStatus>('/key', { method: 'DELETE' })
+}
+
+// The single pre-scored example, visible without signing in.
+export function getDemoJob(): Promise<ScoredJob | null> {
+  return request<ScoredJob | null>('/demo')
+}
+
 export function getProfile(): Promise<Profile | null> {
   return request<Profile | null>('/profile')
 }

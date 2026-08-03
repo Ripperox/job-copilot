@@ -9,7 +9,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "migrate:store": "tsx src/migrate-store.ts",
-    "claim-local": "tsx src/claim-local.ts"
+    "claim-local": "tsx src/claim-local.ts",
+    "seed:demo": "tsx src/seed-demo.ts"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

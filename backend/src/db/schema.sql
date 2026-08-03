@@ -64,6 +64,28 @@ CREATE TABLE IF NOT EXISTS outreach (
   PRIMARY KEY (user_id, job_id)
 );
 
+-- Users' own LLM API keys, encrypted at rest (AES-256-GCM). Never returned to
+-- the client — the API exposes only whether a key is present, plus a mask.
+CREATE TABLE IF NOT EXISTS user_keys (
+  user_id             UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  gemini_key_enc      TEXT NOT NULL,
+  gemini_key_mask     TEXT NOT NULL DEFAULT '',
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Which provider the stored key belongs to ('groq' | 'gemini' | 'anthropic').
+-- Added after the table shipped, hence ALTER rather than a column above.
+ALTER TABLE user_keys ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'gemini';
+
+-- The single pre-scored example shown to visitors who have not added a key.
+-- Computed once on operator keys, so cost does not scale with signups.
+CREATE TABLE IF NOT EXISTS demo_score (
+  job_id     TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+  score      INTEGER NOT NULL,
+  reason     TEXT NOT NULL DEFAULT '',
+  cv_variant TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS scores_user_score_idx    ON scores (user_id, score DESC);
 CREATE INDEX IF NOT EXISTS job_meta_user_status_idx ON job_meta (user_id, status);
 CREATE INDEX IF NOT EXISTS jobs_created_at_idx      ON jobs (created_at DESC);

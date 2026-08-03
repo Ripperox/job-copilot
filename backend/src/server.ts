@@ -9,7 +9,9 @@ import { Profile, Outreach, JobMeta, JOB_STATUSES } from './types';
 import { gatherJobs } from './sources';
 import { scoreJob } from './scoring';
 import { generateOutreach } from './outreach';
-import { llmProvider } from './llm';
+import { llmProvider, llmComplete } from './llm';
+import { encryptSecret, maskKey } from './crypto';
+import { llmConfigForUser, detectProvider, configForKey } from './user-llm';
 import { buildAuthUrl, exchangeCodeForIdentity } from './auth/google';
 import { setSessionCookie, clearSessionCookie } from './auth/session';
 import { attachUser, requireAuth } from './auth/middleware';
@@ -118,6 +120,60 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ------------------------------------------------------------- the free demo
+
+// One pre-scored job, identical for everyone, cached at seed time. Open to
+// signed-out visitors so the product proves itself before anyone adds a key.
+// Operator LLM cost is paid once, not per signup.
+app.get('/api/demo', async (_req, res) => {
+  const job = await db.getDemoJob();
+  if (!job) return res.json(null);
+  res.json(job);
+});
+
+// --------------------------------------------------------- bring-your-own-key
+
+// Reports only whether a key exists and a mask of it — never the key itself.
+app.get('/api/key', requireAuth, async (req, res) => {
+  const record = await db.getUserKeyRecord(req.userId!);
+  res.json({
+    hasKey: Boolean(record),
+    mask: record?.mask ?? null,
+    provider: record?.provider ?? null,
+  });
+});
+
+// The provider is inferred from the key's prefix, then the key is validated with
+// a real call before storage — a typo surfaces here rather than as silently
+// heuristic scores later.
+app.put('/api/key', requireAuth, async (req, res) => {
+  const key = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim()
+    : typeof req.body?.geminiApiKey === 'string' ? req.body.geminiApiKey.trim()
+    : '';
+  if (!key) return res.status(400).json({ error: 'An API key is required.' });
+  if (!config.keyEncryptionSecret) {
+    return res.status(503).json({ error: 'Server cannot store keys: KEY_ENCRYPTION_SECRET is not set.' });
+  }
+
+  const provider = detectProvider(key);
+  try {
+    await llmComplete('Reply with OK.', configForKey(config, provider, key), 16);
+  } catch (e: any) {
+    return res.status(400).json({
+      error: `That key was rejected by ${provider}.`,
+      detail: String(e.message).slice(0, 200),
+    });
+  }
+
+  await db.setUserKey(req.userId!, encryptSecret(key, config.keyEncryptionSecret), maskKey(key), provider);
+  res.json({ hasKey: true, mask: maskKey(key), provider });
+});
+
+app.delete('/api/key', requireAuth, async (req, res) => {
+  await db.deleteUserKey(req.userId!);
+  res.json({ hasKey: false, mask: null, provider: null });
+});
+
 // Everything below this line requires a signed-in user.
 app.use('/api/profile', requireAuth);
 app.use('/api/jobs', requireAuth);
@@ -153,23 +209,28 @@ interface FetchResult {
   added: number;
   scored: number;
   total: number;
+  usedLLM: boolean;
 }
 
 async function runFetchForUser(userId: string): Promise<FetchResult> {
   const profile = await db.getProfile(userId);
   if (!profile) throw new Error('Set your profile first.');
 
-  // Results land in the shared jobs table, so one user's fetch widens the pool
-  // for everyone; only the scores below are private to this user.
+  // Job-source calls run on the OPERATOR's keys — the pool is shared, so it is
+  // fetched once for everyone rather than once per user.
   const gathered = await gatherJobs(profile, config);
   let added = 0;
   for (const job of gathered.jobs) if (await db.upsertJob(job)) added++;
+
+  // Scoring runs on THIS user's own LLM key. Without one it degrades to the
+  // keyword heuristic rather than spending the operator's quota.
+  const { config: llm, hasKey } = await llmConfigForUser(userId, config);
 
   const toScore = await db.unscoredJobs(userId);
   let scored = 0;
   for (const job of toScore) {
     try {
-      const r = await scoreJob(job, profile, config);
+      const r = await scoreJob(job, profile, llm);
       await db.setScore(userId, {
         jobId: job.id, score: r.score, reason: r.reason,
         cvVariant: r.cvVariant, scoredAt: new Date().toISOString(),
@@ -180,7 +241,7 @@ async function runFetchForUser(userId: string): Promise<FetchResult> {
     }
   }
 
-  return { sources: gathered.sources, added, scored, total: (await db.allJobs()).length };
+  return { sources: gathered.sources, added, scored, total: (await db.allJobs()).length, usedLLM: hasKey };
 }
 
 app.post('/api/fetch', async (req, res) => {
@@ -202,10 +263,11 @@ app.post('/api/fetch', async (req, res) => {
 app.post('/api/rescore', async (req, res) => {
   const profile = await db.getProfile(req.userId!);
   if (!profile) return res.status(400).json({ error: 'Set your profile first.' });
+  const { config: llm, hasKey } = await llmConfigForUser(req.userId!, config);
   let rescored = 0;
   for (const job of await db.allJobs()) {
     try {
-      const r = await scoreJob(job, profile, config);
+      const r = await scoreJob(job, profile, llm);
       await db.setScore(req.userId!, {
         jobId: job.id, score: r.score, reason: r.reason,
         cvVariant: r.cvVariant, scoredAt: new Date().toISOString(),
@@ -215,7 +277,7 @@ app.post('/api/rescore', async (req, res) => {
       console.error('rescore failed for', job.id, e);
     }
   }
-  res.json({ rescored });
+  res.json({ rescored, usedLLM: hasKey });
 });
 
 // List scored jobs, filtered by minimum score, best first (SQL does the sort).
@@ -264,7 +326,10 @@ app.post('/api/jobs/:id/outreach', async (req, res) => {
   if (cached && !regenerate) return res.json(cached);
 
   try {
-    const content = await generateOutreach(job, profile, config);
+    // Drafting also spends the user's own LLM quota; without a key they get the
+    // filled-in template instead.
+    const { config: llm } = await llmConfigForUser(req.userId!, config);
+    const content = await generateOutreach(job, profile, llm);
     const score = await db.getScore(req.userId!, job.id);
     const outreach: Outreach = {
       jobId: job.id,
