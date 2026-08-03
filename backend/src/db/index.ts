@@ -1,4 +1,4 @@
-import { query } from './pool';
+import { query, pool } from './pool';
 import { Job, Profile, Score, JobMeta, Outreach, ScoredJob } from '../types';
 import {
   JobRow, toJob,
@@ -42,6 +42,16 @@ const SCORED_JOB_SELECT = `
   LEFT JOIN scores   s ON s.job_id = j.id AND s.user_id = $1
   LEFT JOIN job_meta m ON m.job_id = j.id AND m.user_id = $1`;
 
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+}
+
+interface UserRow { id: string; email: string | null; name: string | null }
+
+const toUser = (r: UserRow): User => ({ id: r.id, email: r.email ?? '', name: r.name ?? '' });
+
 export const db = {
   async ensureUser(id: string, email = '', name = ''): Promise<void> {
     await query(
@@ -49,6 +59,79 @@ export const db = {
        ON CONFLICT (id) DO NOTHING`,
       [id, email, name],
     );
+  },
+
+  // ---- accounts ----
+
+  // Find-or-create by Google's stable subject id. Email/name are refreshed on each
+  // sign-in so a changed Google profile stays in sync.
+  async upsertGoogleUser(googleSub: string, email: string, name: string): Promise<User> {
+    const { rows } = await query<UserRow>(
+      `INSERT INTO users (google_sub, email, name) VALUES ($1, $2, $3)
+       ON CONFLICT (google_sub) DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name
+       RETURNING id, email, name`,
+      [googleSub, email, name],
+    );
+    return toUser(rows[0]);
+  },
+
+  async getUser(id: string): Promise<User | undefined> {
+    const { rows } = await query<UserRow>('SELECT id, email, name FROM users WHERE id = $1', [id]);
+    return rows.length ? toUser(rows[0]) : undefined;
+  },
+
+  // Removes the account and, by ON DELETE CASCADE, its profile, scores, pipeline
+  // and outreach. Shared job rows are untouched.
+  async deleteUser(id: string): Promise<void> {
+    await query('DELETE FROM users WHERE id = $1', [id]);
+  },
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const { rows } = await query<UserRow>(
+      'SELECT id, email, name FROM users WHERE lower(email) = lower($1)',
+      [email],
+    );
+    return rows.length ? toUser(rows[0]) : undefined;
+  },
+
+  // Users the scheduler should fetch for — a profile is what supplies the search
+  // queries, so users without one are skipped.
+  async usersWithProfiles(): Promise<string[]> {
+    const { rows } = await query<{ user_id: string }>('SELECT user_id FROM profiles');
+    return rows.map((r) => r.user_id);
+  },
+
+  // Move every per-user row from one account to another. Used once, to hand the
+  // pre-auth local data to a real Google account. Runs in a transaction so a
+  // failure part-way cannot split the data across two owners.
+  async transferUserData(fromUserId: string, toUserId: string): Promise<Record<string, number>> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const moved: Record<string, number> = {};
+      // Destination rows win on conflict, so re-running is safe.
+      for (const table of ['scores', 'job_meta', 'outreach'] as const) {
+        const r = await client.query(
+          `UPDATE ${table} SET user_id = $2 WHERE user_id = $1
+           AND job_id NOT IN (SELECT job_id FROM ${table} WHERE user_id = $2)`,
+          [fromUserId, toUserId],
+        );
+        moved[table] = r.rowCount ?? 0;
+      }
+      const p = await client.query(
+        `UPDATE profiles SET user_id = $2 WHERE user_id = $1
+         AND NOT EXISTS (SELECT 1 FROM profiles WHERE user_id = $2)`,
+        [fromUserId, toUserId],
+      );
+      moved.profiles = p.rowCount ?? 0;
+      await client.query('COMMIT');
+      return moved;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   },
 
   // ---- jobs (shared across all users) ----

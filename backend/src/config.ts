@@ -30,6 +30,27 @@ export const config = {
   // comma-separated Greenhouse board tokens, e.g. "stripe,airbnb"
   greenhouseBoards: (process.env.GREENHOUSE_BOARDS || '').split(',').map((s) => s.trim()).filter(Boolean),
   leverBoards: (process.env.LEVER_BOARDS || '').split(',').map((s) => s.trim()).filter(Boolean),
+
+  // ---- Auth ----
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  oauthRedirectUrl: process.env.OAUTH_REDIRECT_URL || 'http://localhost:4500/api/auth/google/callback',
+  // Signs the session cookie. Sessions are invalidated if this changes.
+  sessionSecret: process.env.SESSION_SECRET || '',
+  // Encrypts users' stored LLM keys at rest (Phase 4).
+  keyEncryptionSecret: process.env.KEY_ENCRYPTION_SECRET || '',
+  // Comma-separated allowed browser origins. Cookies require an explicit origin
+  // (never a wildcard), so every dev port that serves the frontend is listed.
+  frontendOrigins: (process.env.FRONTEND_ORIGIN ||
+    'http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176')
+    .split(',').map((s) => s.trim()).filter(Boolean),
+  isProduction: process.env.NODE_ENV === 'production',
 };
+
+// True when Google sign-in is fully configured. When false the server still runs,
+// but the auth routes report 503 instead of redirecting to a broken consent screen.
+export function authConfigured(c: Config = config): boolean {
+  return Boolean(c.googleClientId && c.googleClientSecret && c.sessionSecret);
+}
 
 export type Config = typeof config;
