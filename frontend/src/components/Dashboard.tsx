@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { JobStatus, ScoredJob } from '../api'
-import { JOB_STATUSES, fetchJobs, getJobs, rescoreJobs } from '../api'
+import { JOB_STATUSES, UnauthorizedError, fetchJobs, getJobs, rescoreJobs } from '../api'
 import JobCard from './JobCard'
 
 const SCORE_OPTIONS = [0, 50, 60, 70, 80]
@@ -15,7 +15,7 @@ const STATUS_LABELS: Record<JobStatus, string> = {
 
 type StatusFilter = 'all' | JobStatus
 
-export default function Dashboard() {
+export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => void }) {
   const [minScore, setMinScore] = useState(50)
   const [jobs, setJobs] = useState<ScoredJob[]>([])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -32,11 +32,12 @@ export default function Dashboard() {
       const list = await getJobs(score)
       setJobs(list)
     } catch (err: unknown) {
+      if (err instanceof UnauthorizedError) return onUnauthorized?.()
       setError(err instanceof Error ? err.message : 'Failed to load jobs')
     } finally {
       setLoadingList(false)
     }
-  }, [])
+  }, [onUnauthorized])
 
   useEffect(() => {
     void loadJobs(minScore)
