@@ -5,9 +5,10 @@ import * as crypto from 'crypto';
 import { config, authConfigured } from './config';
 import { db, LOCAL_USER_ID } from './db';
 import { applySchema } from './db/migrate';
-import { Profile, Outreach, JobMeta, JOB_STATUSES } from './types';
+import { Job, Profile, Outreach, JobMeta, JOB_STATUSES } from './types';
 import { gatherJobs } from './sources';
 import { scoreJob } from './scoring';
+import { scoreJobsBatched } from './batch-scoring';
 import { generateOutreach } from './outreach';
 import { llmProvider, llmComplete } from './llm';
 import { encryptSecret, maskKey } from './crypto';
@@ -212,6 +213,40 @@ interface FetchResult {
   usedLLM: boolean;
 }
 
+// Scores a set of jobs in as few LLM requests as possible and persists them.
+// scoreJobsBatched guarantees a result for every job, so the only thing that can
+// go wrong here is the database write.
+async function scoreAndStore(
+  userId: string,
+  jobs: Job[],
+  profile: Profile,
+  llm: typeof config,
+): Promise<number> {
+  if (!jobs.length) return 0;
+
+  const outcome = await scoreJobsBatched(jobs, profile, llm);
+  const scoredAt = new Date().toISOString();
+  let written = 0;
+
+  for (const [jobId, r] of outcome.results) {
+    try {
+      await db.setScore(userId, {
+        jobId, score: r.score, reason: r.reason, cvVariant: r.cvVariant, scoredAt,
+      });
+      written++;
+    } catch (e) {
+      console.error('could not store score for', jobId, e);
+    }
+  }
+
+  console.log(
+    `[scoring] user=${userId.slice(0, 8)} jobs=${jobs.length} ` +
+    `gated=${outcome.gated} batched=${outcome.batched} individual=${outcome.individual} ` +
+    `heuristic=${outcome.heuristic} llmRequests=${outcome.llmRequests}`,
+  );
+  return written;
+}
+
 async function runFetchForUser(userId: string): Promise<FetchResult> {
   const profile = await db.getProfile(userId);
   if (!profile) throw new Error('Set your profile first.');
@@ -227,19 +262,7 @@ async function runFetchForUser(userId: string): Promise<FetchResult> {
   const { config: llm, hasKey } = await llmConfigForUser(userId, config);
 
   const toScore = await db.unscoredJobs(userId);
-  let scored = 0;
-  for (const job of toScore) {
-    try {
-      const r = await scoreJob(job, profile, llm);
-      await db.setScore(userId, {
-        jobId: job.id, score: r.score, reason: r.reason,
-        cvVariant: r.cvVariant, scoredAt: new Date().toISOString(),
-      });
-      scored++;
-    } catch (e) {
-      console.error('scoring failed for', job.id, e);
-    }
-  }
+  const scored = await scoreAndStore(userId, toScore, profile, llm);
 
   return { sources: gathered.sources, added, scored, total: (await db.allJobs()).length, usedLLM: hasKey };
 }
@@ -264,19 +287,7 @@ app.post('/api/rescore', async (req, res) => {
   const profile = await db.getProfile(req.userId!);
   if (!profile) return res.status(400).json({ error: 'Set your profile first.' });
   const { config: llm, hasKey } = await llmConfigForUser(req.userId!, config);
-  let rescored = 0;
-  for (const job of await db.allJobs()) {
-    try {
-      const r = await scoreJob(job, profile, llm);
-      await db.setScore(req.userId!, {
-        jobId: job.id, score: r.score, reason: r.reason,
-        cvVariant: r.cvVariant, scoredAt: new Date().toISOString(),
-      });
-      rescored++;
-    } catch (e) {
-      console.error('rescore failed for', job.id, e);
-    }
-  }
+  const rescored = await scoreAndStore(req.userId!, await db.allJobs(), profile, llm);
   res.json({ rescored, usedLLM: hasKey });
 });
 
