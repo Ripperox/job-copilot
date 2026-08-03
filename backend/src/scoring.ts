@@ -18,7 +18,14 @@ const ENG_TITLE =
 // Score a job against the candidate profile. Uses the Anthropic API when a key
 // is configured; otherwise falls back to a keyword heuristic so the app still
 // works with zero setup.
-export async function scoreJob(job: Job, profile: Profile, config: Config = defaultConfig): Promise<ScoreResult> {
+/**
+ * The two cheap gates that run before any LLM call. Returns a finished result
+ * when the job can be judged for free, or null when it genuinely needs the LLM.
+ *
+ * Shared by single-job and batched scoring so both apply identical rules — and
+ * so batching only ever spends requests on jobs the gates could not settle.
+ */
+export function gateJob(job: Job, profile: Profile): ScoreResult | null {
   const defaultVariant = profile.cvVariants[0] ?? 'Default';
 
   // 1. Experience gate FIRST — a junior can't get a senior role, so short-circuit
@@ -32,6 +39,13 @@ export async function scoreJob(job: Job, profile: Profile, config: Config = defa
   //    sales/marketing/support roles that flood big boards, without discarding
   //    real dev jobs that have sparse descriptions.
   if (!ENG_TITLE.test(job.title)) return heuristicScore(job, profile);
+
+  return null;
+}
+
+export async function scoreJob(job: Job, profile: Profile, config: Config = defaultConfig): Promise<ScoreResult> {
+  const gated = gateJob(job, profile);
+  if (gated) return gated;
 
   // 3. LLM-score only the promising, junior-eligible jobs.
   if (hasLLM(config)) {
@@ -88,7 +102,7 @@ Return ONLY JSON: {"score": <0-100 integer>, "reason": "<one concise sentence>",
   };
 }
 
-function heuristicScore(job: Job, profile: Profile): ScoreResult {
+export function heuristicScore(job: Job, profile: Profile): ScoreResult {
   const hay = `${job.title} ${job.description} ${job.location}`.toLowerCase();
   const terms = [...profile.roles, ...profile.mustHaves].map((t) => t.toLowerCase()).filter(Boolean);
   let hits = 0;
