@@ -3,6 +3,9 @@ dotenv.config();
 
 export const config = {
   port: Number(process.env.PORT) || 4500,
+  // How often the backend auto-fetches from all sources, in minutes. 0 disables
+  // the scheduler (manual POST /api/fetch only). Default: hourly.
+  fetchIntervalMinutes: Number(process.env.FETCH_INTERVAL_MINUTES ?? 60),
   adzunaAppId: process.env.ADZUNA_APP_ID || '',
   adzunaAppKey: process.env.ADZUNA_APP_KEY || '',
   adzunaCountry: process.env.ADZUNA_COUNTRY || 'in',
@@ -11,6 +14,9 @@ export const config = {
   groqModel: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
   anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
+  // Google Gemini — generous free tier (1M TPM, ~1500 req/day). Preferred when set.
+  geminiApiKey: process.env.GEMINI_API_KEY || '',
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-flash-latest',
   // JSearch via RapidAPI (aggregates Google for Jobs → LinkedIn, Indeed, Glassdoor…)
   jsearchApiKey: process.env.JSEARCH_RAPIDAPI_KEY || '',
   // Pages per role query (10 jobs/page). More = more coverage but more API quota.
