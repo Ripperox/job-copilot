@@ -59,8 +59,23 @@ export interface Outreach {
 
 export interface Health {
   status: string
-  llm: 'groq' | 'anthropic' | 'heuristic'
+  llm: 'gemini' | 'groq' | 'anthropic' | 'heuristic'
   adzuna: boolean
+  auth: boolean
+}
+
+export interface User {
+  id: string
+  email: string
+  name: string
+}
+
+// Thrown on a 401 so callers can show the sign-in screen instead of an error.
+export class UnauthorizedError extends Error {
+  constructor() {
+    super('Not signed in.')
+    this.name = 'UnauthorizedError'
+  }
 }
 
 export interface FetchResult {
@@ -76,8 +91,11 @@ export interface RescoreResult {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     headers: { 'Content-Type': 'application/json' },
+    // Sends and accepts the session cookie on cross-origin dev requests.
+    credentials: 'include',
     ...init,
   })
+  if (res.status === 401) throw new UnauthorizedError()
   if (!res.ok) {
     let detail = ''
     try {
@@ -96,6 +114,34 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getHealth(): Promise<Health> {
   return request<Health>('/health')
+}
+
+// ---- auth ----
+
+// Resolves to the signed-in user, or null when signed out.
+export async function getMe(): Promise<User | null> {
+  try {
+    return await request<User>('/auth/me')
+  } catch (e) {
+    if (e instanceof UnauthorizedError) return null
+    throw e
+  }
+}
+
+// Full-page redirect: the OAuth consent screen cannot run in fetch(). We pass our
+// own origin so the backend knows where to return us (the dev port varies); it
+// only honours origins on its allowlist.
+export function startGoogleLogin(): void {
+  const back = encodeURIComponent(window.location.origin)
+  window.location.href = `${API}/auth/google?return=${back}`
+}
+
+export function logout(): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>('/auth/logout', { method: 'POST' })
+}
+
+export function deleteAccount(): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>('/auth/account', { method: 'DELETE' })
 }
 
 export function getProfile(): Promise<Profile | null> {

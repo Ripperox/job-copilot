@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Profile } from '../api'
-import { getProfile, saveProfile } from '../api'
+import { UnauthorizedError, deleteAccount, getProfile, saveProfile } from '../api'
 
 const EMPTY: Profile = {
   resumeText: '',
@@ -23,7 +23,15 @@ function fromCsv(value: string): string[] {
     .filter((s) => s.length > 0)
 }
 
-export default function ProfileView() {
+export default function ProfileView({
+  onUnauthorized,
+  onAccountDeleted,
+}: {
+  onUnauthorized?: () => void
+  onAccountDeleted?: () => void
+}) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [resumeText, setResumeText] = useState('')
   const [roles, setRoles] = useState('')
   const [locations, setLocations] = useState('')
@@ -52,7 +60,9 @@ export default function ProfileView() {
         setMaxYoE(p.maxYoE == null ? '3' : String(p.maxYoE))
       })
       .catch((err: unknown) => {
-        if (active) setError(err instanceof Error ? err.message : 'Failed to load profile')
+        if (!active) return
+        if (err instanceof UnauthorizedError) return onUnauthorized?.()
+        setError(err instanceof Error ? err.message : 'Failed to load profile')
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -91,9 +101,24 @@ export default function ProfileView() {
       setSaved(true)
       window.setTimeout(() => setSaved(false), 2500)
     } catch (err: unknown) {
+      if (err instanceof UnauthorizedError) return onUnauthorized?.()
       setError(err instanceof Error ? err.message : 'Failed to save profile')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setDeleting(true)
+    setError(null)
+    try {
+      await deleteAccount()
+      onAccountDeleted?.()
+    } catch (err: unknown) {
+      if (err instanceof UnauthorizedError) return onUnauthorized?.()
+      setError(err instanceof Error ? err.message : 'Failed to delete account')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -198,6 +223,28 @@ export default function ProfileView() {
           </button>
           {saved && <span className="saved-note">Saved ✓</span>}
         </div>
+      </div>
+
+      <div className="card">
+        <h2>Danger zone</h2>
+        <p className="muted">
+          Deleting your account permanently removes your résumé, scores, pipeline and
+          outreach drafts. Shared job listings are not affected. This cannot be undone.
+        </p>
+        {confirmingDelete ? (
+          <div className="row">
+            <button className="btn btn-danger" onClick={handleDeleteAccount} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Yes, delete everything'}
+            </button>
+            <button className="btn" onClick={() => setConfirmingDelete(false)} disabled={deleting}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button className="btn btn-danger" onClick={() => setConfirmingDelete(true)}>
+            Delete my account
+          </button>
+        )}
       </div>
     </div>
   )

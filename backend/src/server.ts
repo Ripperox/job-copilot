@@ -34,21 +34,33 @@ app.get('/api/health', (_req, res) => {
 // ---------------------------------------------------------------- auth routes
 
 const OAUTH_STATE_COOKIE = 'jc_oauth_state';
+const OAUTH_RETURN_COOKIE = 'jc_oauth_return';
+
+// Where to send the browser after sign-in. The frontend passes its own origin
+// (its dev port moves around), but we only honour origins on the allowlist — an
+// open redirect here would let an attacker bounce a fresh session anywhere.
+function safeReturnOrigin(requested: unknown): string {
+  const fallback = config.frontendOrigins[0] ?? '/';
+  if (typeof requested !== 'string' || !requested) return fallback;
+  return config.frontendOrigins.includes(requested) ? requested : fallback;
+}
 
 // Start sign-in: stash a random state in a short-lived cookie (CSRF defence) and
 // bounce the browser to Google's consent screen.
-app.get('/api/auth/google', (_req, res) => {
+app.get('/api/auth/google', (req, res) => {
   if (!authConfigured(config)) {
     return res.status(503).json({ error: 'Google sign-in is not configured on this server.' });
   }
   const state = crypto.randomBytes(16).toString('hex');
-  res.cookie(OAUTH_STATE_COOKIE, state, {
+  const shortLived = {
     httpOnly: true,
     secure: config.isProduction,
-    sameSite: 'lax',
+    sameSite: 'lax' as const,
     maxAge: 10 * 60 * 1000,
     path: '/',
-  });
+  };
+  res.cookie(OAUTH_STATE_COOKIE, state, shortLived);
+  res.cookie(OAUTH_RETURN_COOKIE, safeReturnOrigin(req.query.return), shortLived);
   res.redirect(buildAuthUrl(state, config));
 });
 
@@ -58,12 +70,13 @@ app.get('/api/auth/google/callback', async (req, res) => {
   if (!authConfigured(config)) {
     return res.status(503).json({ error: 'Google sign-in is not configured on this server.' });
   }
-  const frontend = config.frontendOrigins[0] ?? '/';
+  const frontend = safeReturnOrigin(req.cookies?.[OAUTH_RETURN_COOKIE]);
   const code = typeof req.query.code === 'string' ? req.query.code : '';
   const state = typeof req.query.state === 'string' ? req.query.state : '';
   const expected = req.cookies?.[OAUTH_STATE_COOKIE];
 
   res.clearCookie(OAUTH_STATE_COOKIE, { path: '/' });
+  res.clearCookie(OAUTH_RETURN_COOKIE, { path: '/' });
 
   if (!code) return res.redirect(`${frontend}/?auth=error`);
   if (!state || !expected || state !== expected) {
