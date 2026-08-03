@@ -3,6 +3,7 @@ import { encryptSecret, decryptSecret, maskKey } from '../src/crypto';
 import { closePool } from '../src/db/pool';
 
 const SECRET = 'unit-test-encryption-secret';
+// Fake, non-functional key shaped like a real one. Never put a live key in tests.
 const KEY = 'AQ.Bx0000000000000000000000000000000000000000000000';
 
 describe('secret encryption', () => {
@@ -40,9 +41,9 @@ describe('secret encryption', () => {
 
   it('masks a key without revealing the middle', () => {
     const masked = maskKey(KEY);
-    expect(masked.startsWith('AQ.Ab')).toBe(true);
-    expect(masked.endsWith('B9Gg')).toBe(true);
-    expect(masked).not.toContain('RN6IgfARCHGUDrDWyIjAsuGlSSVc8');
+    expect(masked.startsWith('AQ.Bx')).toBe(true);
+    expect(masked.endsWith('0000')).toBe(true);
+    expect(masked.length).toBeLessThan(KEY.length);
     expect(maskKey('short')).toBe('••••');
   });
 });
