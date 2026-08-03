@@ -30,22 +30,34 @@ export function verifySession(token: string | undefined, config: Config = defaul
   }
 }
 
+/**
+ * Cookie flags differ between dev and production, and getting this wrong makes
+ * login fail silently.
+ *
+ * In dev the frontend (localhost:5176) and API (localhost:4500) differ only by
+ * port, so the browser treats them as the SAME site and SameSite=Lax works.
+ *
+ * In production they are genuinely different sites (app.vercel.app calling
+ * api.onrender.com). Lax would make the browser refuse to send the session
+ * cookie on those cross-site XHRs, so it must be SameSite=None — which the spec
+ * only permits together with Secure.
+ */
+export function sessionCookieOptions(config: Config = defaultConfig) {
+  return {
+    httpOnly: true,
+    secure: config.isProduction, // Secure requires HTTPS, which local dev lacks
+    sameSite: (config.isProduction ? 'none' : 'lax') as 'none' | 'lax',
+    path: '/',
+  };
+}
+
 export function setSessionCookie(res: Response, userId: string, config: Config = defaultConfig): void {
   res.cookie(SESSION_COOKIE, signSession(userId, config), {
-    httpOnly: true,
-    // Secure requires HTTPS, which local dev does not have.
-    secure: config.isProduction,
-    sameSite: 'lax',
+    ...sessionCookieOptions(config),
     maxAge: SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
-    path: '/',
   });
 }
 
 export function clearSessionCookie(res: Response, config: Config = defaultConfig): void {
-  res.clearCookie(SESSION_COOKIE, {
-    httpOnly: true,
-    secure: config.isProduction,
-    sameSite: 'lax',
-    path: '/',
-  });
+  res.clearCookie(SESSION_COOKIE, sessionCookieOptions(config));
 }

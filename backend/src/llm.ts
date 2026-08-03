@@ -2,6 +2,19 @@ import { Config } from './config';
 
 export type LLMProvider = 'gemini' | 'groq' | 'anthropic' | 'heuristic';
 
+// Carries the provider's HTTP status so callers can tell "this key is wrong"
+// (401/403) from "this key is fine but out of quota right now" (429).
+export class LLMError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'LLMError';
+  }
+}
+
+export function isRateLimit(e: unknown): boolean {
+  return e instanceof LLMError && e.status === 429;
+}
+
 // Groq is preferred over Gemini on measured free-tier capacity (2026-08-03):
 // Groq llama-3.3-70b allows ~1000 requests/day, while Gemini's free tier is
 // ~20 requests/day on gemini-3.6-flash and 0 on the older 2.0 models. Scoring a
@@ -45,7 +58,7 @@ async function geminiComplete(prompt: string, config: Config, maxTokens: number)
       },
     }),
   });
-  if (!resp.ok) throw new Error(`Gemini ${resp.status}: ${await resp.text()}`);
+  if (!resp.ok) throw new LLMError(`Gemini ${resp.status}: ${await resp.text()}`, resp.status);
   const data: any = await resp.json();
   // A response can hold several parts (e.g. a thought part + the text part); join
   // every part that carries text so we never drop the answer.
@@ -67,7 +80,7 @@ async function groqComplete(prompt: string, config: Config, maxTokens: number): 
       messages: [{ role: 'user', content: prompt }],
     }),
   });
-  if (!resp.ok) throw new Error(`Groq ${resp.status}: ${await resp.text()}`);
+  if (!resp.ok) throw new LLMError(`Groq ${resp.status}: ${await resp.text()}`, resp.status);
   const data: any = await resp.json();
   return data.choices?.[0]?.message?.content ?? '';
 }
@@ -86,7 +99,7 @@ async function anthropicComplete(prompt: string, config: Config, maxTokens: numb
       messages: [{ role: 'user', content: prompt }],
     }),
   });
-  if (!resp.ok) throw new Error(`Anthropic ${resp.status}: ${await resp.text()}`);
+  if (!resp.ok) throw new LLMError(`Anthropic ${resp.status}: ${await resp.text()}`, resp.status);
   const data: any = await resp.json();
   return data.content?.[0]?.text ?? '';
 }
