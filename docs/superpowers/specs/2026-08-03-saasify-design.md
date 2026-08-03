@@ -1,7 +1,13 @@
 # Job Copilot — Multi-tenant SaaS design
 
 **Date:** 2026-08-03
-**Status:** approved (design), pending implementation
+**Status:** approved. **Phase 1 (Postgres migration) — SHIPPED 2026-08-03** on branch
+`saas-phase1-postgres` (30 tests passing; 409 jobs / 409 scores / 6 pipeline entries
+migrated from `store.json` and verified against a backup). Phases 2–5 pending.
+
+One refinement adopted during Phase 1: the `users` table and `user_id` columns were
+created up front and every `db` call site threads a fixed `LOCAL_USER_ID`, so Phase 3
+is parameter plumbing (constant → session) rather than a schema and query rewrite.
 **Scope:** turn the single-user local Job Copilot into a hosted, multi-tenant web app with Google login and bring-your-own-key (BYOK) LLM scoring.
 
 ---
