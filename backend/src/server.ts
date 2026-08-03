@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import * as crypto from 'crypto';
 import { config, authConfigured } from './config';
 import { db, LOCAL_USER_ID } from './db';
+import { query, closePool } from './db/pool';
 import { applySchema } from './db/migrate';
 import { Job, Profile, Outreach, JobMeta, JOB_STATUSES } from './types';
 import { gatherJobs } from './sources';
@@ -29,9 +30,19 @@ app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 app.use(attachUser);
 
-app.get('/api/health', (_req, res) => {
-  res.json({
-    status: 'ok',
+// Render polls this as the health check, so it must actually prove the process
+// is usable — a server that booted but cannot reach Postgres is not healthy.
+app.get('/api/health', async (_req, res) => {
+  let dbOk = false;
+  try {
+    await query('SELECT 1');
+    dbOk = true;
+  } catch (e) {
+    console.error('health: database unreachable', e);
+  }
+  res.status(dbOk ? 200 : 503).json({
+    status: dbOk ? 'ok' : 'degraded',
+    db: dbOk,
     llm: llmProvider(config),
     adzuna: Boolean(config.adzunaAppId && config.adzunaAppKey),
     auth: authConfigured(config),
@@ -415,6 +426,20 @@ function startScheduler(): void {
 // Only bind a port when run directly (`tsx src/server.ts`). Tests import the app
 // and drive it in-process, which must not start a listener or the scheduler.
 if (require.main === module) {
+  // Render sends SIGTERM on redeploy and scale-down. Close the pool so in-flight
+  // queries finish and Postgres connections are released rather than leaked.
+  const shutdown = (signal: string) => async () => {
+    console.log(`${signal} received — closing database pool.`);
+    try {
+      await closePool();
+    } catch (e) {
+      console.error('error closing pool:', e);
+    }
+    process.exit(0);
+  };
+  process.on('SIGTERM', shutdown('SIGTERM'));
+  process.on('SIGINT', shutdown('SIGINT'));
+
   app.listen(config.port, async () => {
     console.log(`Job Copilot API on http://localhost:${config.port}`);
     try {

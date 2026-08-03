@@ -59,7 +59,9 @@ export async function scoreJob(job: Job, profile: Profile, config: Config = defa
   return heuristicScore(job, profile);
 }
 
-async function scoreWithLLM(job: Job, profile: Profile, config: Config): Promise<ScoreResult> {
+// Exported for the batch scorer, which needs the raw error (rate limits in
+// particular) rather than scoreJob's silent heuristic fallback.
+export async function scoreWithLLM(job: Job, profile: Profile, config: Config): Promise<ScoreResult> {
   const prompt = `You help a job seeker decide whether to APPLY. The candidate is EQUALLY happy in BACKEND or FULL-STACK roles — treat both as primary targets, and NEVER down-score a full-stack role just because their resume leans backend.
 
 Score for apply-worthiness, not a perfect match:

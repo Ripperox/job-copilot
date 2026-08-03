@@ -15,6 +15,13 @@ export function isRateLimit(e: unknown): boolean {
   return e instanceof LLMError && e.status === 429;
 }
 
+// Errors where retrying — with a smaller batch or anything else — cannot help
+// for the remainder of this run: the key is wrong (401/403) or the quota is
+// gone (429). Callers should stop calling the provider rather than fan out.
+export function isTerminalForRun(e: unknown): boolean {
+  return e instanceof LLMError && (e.status === 401 || e.status === 403 || e.status === 429);
+}
+
 // Groq is preferred over Gemini on measured free-tier capacity (2026-08-03):
 // Groq llama-3.3-70b allows ~1000 requests/day, while Gemini's free tier is
 // ~20 requests/day on gemini-3.6-flash and 0 on the older 2.0 models. Scoring a

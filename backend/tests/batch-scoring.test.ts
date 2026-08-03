@@ -143,6 +143,21 @@ describe('scoreJobsBatched', () => {
     expect(out.llmRequests).toBe(0);
   });
 
+  it('does NOT multiply requests when the provider rate-limits', async () => {
+    // A rate limit is not a size problem. Splitting and retrying would fire more
+    // calls at a limit we have already hit; the breaker must stop after one.
+    const jobs = Array.from({ length: 60 }, (_, i) => job(`r:${i}`));
+    const fakeGroq = { ...config, groqApiKey: 'gsk_definitely_invalid_key_for_tests', geminiApiKey: '', anthropicApiKey: '' };
+
+    const out = await scoreJobsBatched(jobs, profile, fakeGroq);
+
+    // Every job still gets a result...
+    expect(out.results.size).toBe(60);
+    expect(out.gated + out.batched + out.individual + out.heuristic).toBe(60);
+    // ...and we never fired anywhere near one request per job.
+    expect(out.llmRequests).toBeLessThanOrEqual(3);
+  }, 60000);
+
   it('accounts for every job across the outcome counters', async () => {
     const jobs = [
       job('a:1'),

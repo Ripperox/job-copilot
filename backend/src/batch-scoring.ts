@@ -1,7 +1,7 @@
 import { Job, Profile } from './types';
 import { config as defaultConfig, Config } from './config';
-import { llmComplete, hasLLM, llmProvider } from './llm';
-import { ScoreResult, scoreJob, gateJob, heuristicScore } from './scoring';
+import { llmComplete, hasLLM, llmProvider, isRateLimit, isTerminalForRun } from './llm';
+import { ScoreResult, gateJob, heuristicScore, scoreWithLLM } from './scoring';
 
 // Batched scoring: many jobs per LLM request instead of one.
 //
@@ -54,6 +54,15 @@ export interface BatchScoreOutcome {
   /** Jobs that ended on the keyword heuristic. */
   heuristic: number;
   llmRequests: number;
+  /** True when the provider rejected us (bad key or quota) and the run stopped calling it. */
+  rateLimited: boolean;
+}
+
+// Once a provider rejects us for a reason that will not change during this run
+// (bad key, exhausted quota), every further call is wasted and makes it worse. A
+// run-scoped breaker stops calling and quietly heuristics the remainder.
+class RateLimitBreaker {
+  tripped = false;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -74,8 +83,10 @@ export async function scoreJobsBatched(
     individual: 0,
     heuristic: 0,
     llmRequests: 0,
+    rateLimited: false,
   };
   if (!jobs.length) return out;
+  const breaker = new RateLimitBreaker();
 
   // 1. Cheap gates first — they cost nothing and typically remove most of the
   //    pool (senior titles, non-engineering roles), so the LLM only sees the
@@ -108,10 +119,19 @@ export async function scoreJobsBatched(
 
   for (let i = 0; i < needsLLM.length; i += size) {
     const batch = needsLLM.slice(i, i + size);
+    if (breaker.tripped) {
+      // Quota is gone for now; stop burning calls and heuristic the remainder.
+      for (const job of batch) {
+        out.results.set(job.id, heuristicScore(job, profile));
+        out.heuristic++;
+      }
+      continue;
+    }
     if (i > 0 && pace) await sleep(pace);
-    await scoreBatchWithFallbacks(batch, profile, config, out, 0);
+    await scoreBatchWithFallbacks(batch, profile, config, out, 0, breaker);
   }
 
+  out.rateLimited = breaker.tripped;
   return out;
 }
 
@@ -125,12 +145,21 @@ async function scoreBatchWithFallbacks(
   config: Config,
   out: BatchScoreOutcome,
   depth: number,
+  breaker: RateLimitBreaker,
 ): Promise<void> {
   if (!batch.length) return;
 
+  if (breaker.tripped) {
+    for (const job of batch) {
+      out.results.set(job.id, heuristicScore(job, profile));
+      out.heuristic++;
+    }
+    return;
+  }
+
   // A single job has nothing left to split; score it directly.
   if (batch.length === 1) {
-    await scoreIndividually(batch, profile, config, out);
+    await scoreIndividually(batch, profile, config, out, breaker);
     return;
   }
 
@@ -138,19 +167,33 @@ async function scoreBatchWithFallbacks(
   try {
     out.llmRequests++;
     text = await llmComplete(batchPrompt(batch, profile), config, batchMaxTokens(batch.length));
-  } catch (e: any) {
-    const message = String(e?.message ?? e);
-    // Splitting helps when the failure is size-related (token limits, output
-    // truncation). Two levels is enough to reach a small batch; beyond that,
-    // stop halving and just do them one by one.
+  } catch (e: unknown) {
+    const message = String((e as Error)?.message ?? e);
+
+    // A rate limit is NOT a size problem. Splitting and retrying would multiply
+    // requests against a limit we have already hit — the opposite of helping.
+    // Trip the breaker and heuristic this batch and everything after it.
+    if (isTerminalForRun(e)) {
+      breaker.tripped = true;
+      const why = isRateLimit(e) ? 'rate limited' : 'key rejected';
+      console.error(`${why} by provider — heuristic for the rest of this run (${message.slice(0, 120)})`);
+      for (const job of batch) {
+        out.results.set(job.id, heuristicScore(job, profile));
+        out.heuristic++;
+      }
+      return;
+    }
+
+    // Other failures may well be size-related (token ceiling, truncated output),
+    // where halving genuinely helps. Two levels, then one-by-one.
     if (depth < 2) {
       console.error(`batch of ${batch.length} failed (${message.slice(0, 120)}) — splitting`);
       const mid = Math.ceil(batch.length / 2);
-      await scoreBatchWithFallbacks(batch.slice(0, mid), profile, config, out, depth + 1);
-      await scoreBatchWithFallbacks(batch.slice(mid), profile, config, out, depth + 1);
+      await scoreBatchWithFallbacks(batch.slice(0, mid), profile, config, out, depth + 1, breaker);
+      await scoreBatchWithFallbacks(batch.slice(mid), profile, config, out, depth + 1, breaker);
     } else {
       console.error(`batch of ${batch.length} failed (${message.slice(0, 120)}) — scoring individually`);
-      await scoreIndividually(batch, profile, config, out);
+      await scoreIndividually(batch, profile, config, out, breaker);
     }
     return;
   }
@@ -170,7 +213,7 @@ async function scoreBatchWithFallbacks(
 
   if (missing.length) {
     console.error(`batch response omitted ${missing.length}/${batch.length} jobs — retrying those individually`);
-    await scoreIndividually(missing, profile, config, out);
+    await scoreIndividually(missing, profile, config, out, breaker);
   }
 }
 
@@ -181,20 +224,41 @@ async function scoreIndividually(
   profile: Profile,
   config: Config,
   out: BatchScoreOutcome,
+  breaker: RateLimitBreaker,
 ): Promise<void> {
   for (const job of jobs) {
+    if (breaker.tripped) {
+      out.results.set(job.id, heuristicScore(job, profile));
+      out.heuristic++;
+      continue;
+    }
     try {
-      const r = await scoreJob(job, profile, config);
+      out.llmRequests++;
+      const r = await scoreWithLLMOrThrow(job, profile, config);
       out.results.set(job.id, r);
-      if (r.reason.startsWith('Heuristic:')) out.heuristic++;
-      else out.individual++;
+      out.individual++;
     } catch (e) {
-      // scoreJob is already defensive, but never let one job break the run.
-      console.error('individual scoring failed for', job.id, e);
+      // Surface the rate limit rather than swallowing it inside scoreJob, so the
+      // breaker can stop the remaining jobs from each making their own doomed call.
+      if (isTerminalForRun(e)) {
+        breaker.tripped = true;
+        console.error(
+          `${isRateLimit(e) ? 'rate limited' : 'key rejected'} during individual scoring — heuristic for the rest of this run`,
+        );
+      }
       out.results.set(job.id, heuristicScore(job, profile));
       out.heuristic++;
     }
   }
+}
+
+// scoreJob swallows LLM errors internally (it always returns a result), which
+// hides rate limits from the breaker. For the batch path we need the error, so
+// the gates run first and then the LLM call is made directly.
+async function scoreWithLLMOrThrow(job: Job, profile: Profile, config: Config): Promise<ScoreResult> {
+  const gated = gateJob(job, profile);
+  if (gated) return gated;
+  return scoreWithLLM(job, profile, config);
 }
 
 // Output budget: each job needs roughly 60 tokens of JSON. Add generous headroom
