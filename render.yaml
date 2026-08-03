@@ -1,0 +1,58 @@
+# Render blueprint for the Job Copilot backend.
+# The backend needs a long-lived process (the hourly fetch scheduler runs in it),
+# so it is a web service rather than a serverless function.
+#
+# Deploy: push this repo to GitHub, then Render → New → Blueprint → pick the repo.
+# Secrets marked sync:false must be pasted into the Render dashboard; they are
+# never committed.
+
+services:
+  - type: web
+    name: job-copilot-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # --- required ---
+      - key: DATABASE_URL          # Neon connection string (include ?sslmode=require)
+        sync: false
+      - key: SESSION_SECRET        # openssl rand -base64 48
+        sync: false
+      - key: KEY_ENCRYPTION_SECRET # openssl rand -base64 32 — changing this orphans stored user keys
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: OAUTH_REDIRECT_URL    # https://<this-service>.onrender.com/api/auth/google/callback
+        sync: false
+      - key: FRONTEND_ORIGIN       # https://<your-app>.vercel.app  (comma-separated for several)
+        sync: false
+
+      # --- job sources (operator-side; the shared pool is fetched once for everyone) ---
+      - key: ADZUNA_APP_ID
+        sync: false
+      - key: ADZUNA_APP_KEY
+        sync: false
+      - key: ADZUNA_COUNTRY
+        value: in
+      - key: JOOBLE_API_KEY
+        sync: false
+      - key: JSEARCH_RAPIDAPI_KEY
+        sync: false
+
+      # --- operator LLM key: used ONLY for the cached demo job, never for users ---
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+
+      # How often the shared job pool refreshes. 60 = hourly.
+      - key: FETCH_INTERVAL_MINUTES
+        value: "60"

@@ -4,9 +4,15 @@ import { Pool, QueryResult, QueryResultRow } from 'pg';
 // tests/helpers/env.ts, which runs before any module import.
 const connectionString = process.env.DATABASE_URL || 'postgres://localhost:5432/jobcopilot';
 
+// Hosted Postgres (Neon, Supabase, Render) requires TLS, but their certificates
+// are not in Node's default trust store, so verification has to be relaxed. Local
+// Postgres has no TLS at all — hence keying off the connection string.
+const needsSsl = /neon\.tech|supabase|render\.com|amazonaws\.com|sslmode=require/.test(connectionString);
+
 export const pool = new Pool({
   connectionString,
   max: Number(process.env.PG_POOL_MAX) || 10,
+  ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
 });
 
 export function query<T extends QueryResultRow = QueryResultRow>(

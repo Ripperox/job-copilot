@@ -10,14 +10,18 @@ import { gatherJobs } from './sources';
 import { scoreJob } from './scoring';
 import { scoreJobsBatched } from './batch-scoring';
 import { generateOutreach } from './outreach';
-import { llmProvider, llmComplete } from './llm';
+import { llmProvider, llmComplete, isRateLimit } from './llm';
 import { encryptSecret, maskKey } from './crypto';
 import { llmConfigForUser, detectProvider, configForKey } from './user-llm';
 import { buildAuthUrl, exchangeCodeForIdentity } from './auth/google';
-import { setSessionCookie, clearSessionCookie } from './auth/session';
+import { setSessionCookie, clearSessionCookie, sessionCookieOptions } from './auth/session';
 import { attachUser, requireAuth } from './auth/middleware';
 
 const app = express();
+// Hosts like Render/Fly terminate TLS at their proxy and forward plain HTTP.
+// Without this, Express sees an insecure connection and refuses to set Secure
+// cookies, which silently breaks sign-in in production.
+if (config.isProduction) app.set('trust proxy', 1);
 // Cookies need an explicit origin and credentials:true — a wildcard origin would
 // make the browser drop the session cookie.
 app.use(cors({ origin: config.frontendOrigins, credentials: true }));
@@ -55,13 +59,9 @@ app.get('/api/auth/google', (req, res) => {
     return res.status(503).json({ error: 'Google sign-in is not configured on this server.' });
   }
   const state = crypto.randomBytes(16).toString('hex');
-  const shortLived = {
-    httpOnly: true,
-    secure: config.isProduction,
-    sameSite: 'lax' as const,
-    maxAge: 10 * 60 * 1000,
-    path: '/',
-  };
+  // These must survive Google's cross-site redirect back to the callback, so in
+  // production they need the same None+Secure treatment as the session cookie.
+  const shortLived = { ...sessionCookieOptions(config), maxAge: 10 * 60 * 1000 };
   res.cookie(OAUTH_STATE_COOKIE, state, shortLived);
   res.cookie(OAUTH_RETURN_COOKIE, safeReturnOrigin(req.query.return), shortLived);
   res.redirect(buildAuthUrl(state, config));
@@ -157,17 +157,25 @@ app.put('/api/key', requireAuth, async (req, res) => {
   }
 
   const provider = detectProvider(key);
+  let warning: string | undefined;
   try {
     await llmComplete('Reply with OK.', configForKey(config, provider, key), 16);
-  } catch (e: any) {
-    return res.status(400).json({
-      error: `That key was rejected by ${provider}.`,
-      detail: String(e.message).slice(0, 200),
-    });
+  } catch (e: unknown) {
+    // A 429 means the key is VALID but out of quota right now — rejecting it
+    // would lock out anyone whose free tier is momentarily exhausted. Store it
+    // and warn instead. Only auth-shaped failures mean the key is actually bad.
+    if (isRateLimit(e)) {
+      warning = `${provider} accepted the key but is rate-limited right now, so scoring may fall back to keywords until quota resets.`;
+    } else {
+      return res.status(400).json({
+        error: `That key was rejected by ${provider}.`,
+        detail: String((e as Error).message).slice(0, 200),
+      });
+    }
   }
 
   await db.setUserKey(req.userId!, encryptSecret(key, config.keyEncryptionSecret), maskKey(key), provider);
-  res.json({ hasKey: true, mask: maskKey(key), provider });
+  res.json({ hasKey: true, mask: maskKey(key), provider, warning });
 });
 
 app.delete('/api/key', requireAuth, async (req, res) => {
