@@ -38,20 +38,25 @@ app.put('/api/profile', (req, res) => {
   res.json(db.setProfile(profile));
 });
 
-// Pull jobs from all sources, then score any that are new.
-app.post('/api/fetch', async (_req, res) => {
-  const profile = db.getProfile();
-  if (!profile) return res.status(400).json({ error: 'Set your profile first.' });
+// Pull jobs from all sources, then score any that are new. Shared by the manual
+// POST /api/fetch endpoint and the hourly auto-fetch scheduler. A single in-flight
+// lock prevents a scheduled run and a manual click (or two ticks) from overlapping.
+let fetching = false;
 
-  let sources: string[] = [];
-  try {
-    const gathered = await gatherJobs(profile, config);
-    sources = gathered.sources;
-    for (const job of gathered.jobs) db.upsertJob(job);
-  } catch (e: any) {
-    console.error('fetch failed:', e);
-    return res.status(500).json({ error: 'Failed to fetch jobs', detail: e.message });
-  }
+interface FetchResult {
+  sources: string[];
+  added: number;
+  scored: number;
+  total: number;
+}
+
+async function runFetch(): Promise<FetchResult> {
+  const profile = db.getProfile();
+  if (!profile) throw new Error('Set your profile first.');
+
+  const gathered = await gatherJobs(profile, config);
+  let added = 0;
+  for (const job of gathered.jobs) if (db.upsertJob(job)) added++;
 
   const toScore = db.unscoredJobs();
   let scored = 0;
@@ -65,7 +70,21 @@ app.post('/api/fetch', async (_req, res) => {
     }
   }
 
-  res.json({ sources, scored, total: db.allJobs().length });
+  return { sources: gathered.sources, added, scored, total: db.allJobs().length };
+}
+
+app.post('/api/fetch', async (_req, res) => {
+  if (fetching) return res.status(409).json({ error: 'A fetch is already in progress.' });
+  fetching = true;
+  try {
+    const result = await runFetch();
+    res.json(result);
+  } catch (e: any) {
+    console.error('fetch failed:', e);
+    res.status(500).json({ error: 'Failed to fetch jobs', detail: e.message });
+  } finally {
+    fetching = false;
+  }
 });
 
 function toScoredJob(job: Job): ScoredJob {
@@ -167,6 +186,39 @@ app.post('/api/jobs/:id/outreach', async (req, res) => {
   }
 });
 
-app.listen(config.port, () => console.log(`Job Copilot API on http://localhost:${config.port}`));
+// Auto-fetch scheduler: run runFetch() on a fixed interval so new postings roll in
+// without anyone clicking "fetch". Skips a tick if the previous run is still going
+// (a full fetch+score can take ~1 min). Set FETCH_INTERVAL_MINUTES=0 to disable.
+function startScheduler(): void {
+  const minutes = config.fetchIntervalMinutes;
+  if (!minutes || minutes <= 0) {
+    console.log('Auto-fetch scheduler disabled (FETCH_INTERVAL_MINUTES=0).');
+    return;
+  }
+  const runScheduled = async () => {
+    if (fetching) {
+      console.log('[scheduler] previous fetch still running — skipping this tick.');
+      return;
+    }
+    fetching = true;
+    try {
+      const r = await runFetch();
+      console.log(`[scheduler] fetched: sources=${r.sources.join(',') || 'none'} added=${r.added} scored=${r.scored} total=${r.total}`);
+    } catch (e: any) {
+      console.error('[scheduler] fetch failed:', e.message);
+    } finally {
+      fetching = false;
+    }
+  };
+  setInterval(runScheduled, minutes * 60 * 1000);
+  console.log(`Auto-fetch scheduler on: every ${minutes} min.`);
+  // Kick off one run shortly after boot so the list is fresh on startup.
+  setTimeout(runScheduled, 5000);
+}
+
+app.listen(config.port, () => {
+  console.log(`Job Copilot API on http://localhost:${config.port}`);
+  startScheduler();
+});
 
 export default app;
