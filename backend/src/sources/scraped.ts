@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { Job, Profile } from '../types';
 import { Config } from '../config';
 import { scrapePage } from '../scrapers';
-import { llmComplete, hasLLM } from '../llm';
+import { llmComplete, hasLLM, llmProvider, isTerminalForRun } from '../llm';
 
 // Company career pages as a job source.
 //
@@ -18,40 +18,158 @@ import { llmComplete, hasLLM } from '../llm';
 // 413 in testing. Long pages shrink-and-retry below rather than being dropped.
 const MAX_PAGE_CHARS = 12000;
 
+// When the last scrape ran. Career pages change daily at most, while the job
+// fetch runs hourly — without this gate every tick would re-scrape every page
+// and burn the month's scraping credits in a couple of days.
+//
+// Deliberately in-memory: a restart costs at most one extra scrape cycle, which
+// the quota has headroom for, and it avoids a schema change purely for a clock.
+let lastScrapeAt = 0;
+
+// Where the rotating window starts next run, so a long target list is covered
+// over several days instead of all at once.
+let scrapeCursor = 0;
+
+/** Exposed so the API can report when career pages were last read. */
+export function lastScrapeTime(): number {
+  return lastScrapeAt;
+}
+
 export async function fetchScrapedJobs(profile: Profile, config: Config): Promise<Job[]> {
   if (!config.scrapeCareerPages.length) return [];
 
-  const jobs: Job[] = [];
-  for (const pageUrl of config.scrapeCareerPages) {
+  const dueAt = lastScrapeAt + config.scrapeIntervalHours * 60 * 60 * 1000;
+  if (lastScrapeAt && Date.now() < dueAt) {
+    const mins = Math.round((dueAt - Date.now()) / 60000);
+    console.error(`[scraped] skipping — next career-page scrape due in ${mins} min`);
+    return [];
+  }
+  lastScrapeAt = Date.now();
+
+  // Read a rotating WINDOW of the target list rather than all of it.
+  //
+  // The binding constraint is not Firecrawl (1 credit/page) but the LLM that
+  // parses each page: roughly 3k tokens each, against a free tier that must also
+  // pay for scoring the whole job pool. Reading everything daily starves scoring.
+  // Rotating covers every page every few days while staying inside the budget.
+  const all = config.scrapeCareerPages;
+  const size = Math.max(1, Math.min(config.scrapeMaxPagesPerRun, all.length));
+  const start = scrapeCursor % all.length;
+  const targets = Array.from({ length: size }, (_, i) => all[(start + i) % all.length]);
+  scrapeCursor = (start + size) % all.length;
+
+  if (size < all.length) {
+    console.error(
+      `[scraped] reading ${size}/${all.length} pages this run (window from #${start}); ` +
+      `full list covered every ${Math.ceil(all.length / size)} runs`,
+    );
+  }
+
+  // 1. Fetch every page first. This is the cheap half (one Firecrawl credit
+  //    each) and is independent of the LLM budget.
+  const fetched: { url: string; content: string }[] = [];
+  for (const pageUrl of targets) {
     try {
       const { result, provider } = await scrapePage(pageUrl, config);
       if (!result.content.trim()) {
         console.error(`[scraped] ${pageUrl} returned no content (via ${provider})`);
         continue;
       }
-      const extracted = await extractJobs(result.content, pageUrl, profile, config);
-      console.error(`[scraped] ${pageUrl} via ${provider}: ${extracted.length} roles`);
-      jobs.push(...extracted);
+      fetched.push({ url: pageUrl, content: result.content });
     } catch (e: any) {
-      // One dead career page must never fail the whole fetch.
-      console.error(`[scraped] ${pageUrl} failed:`, String(e?.message ?? e).slice(0, 200));
+      // One dead career page must never fail the whole run.
+      console.error(`[scraped] ${pageUrl} fetch failed:`, String(e?.message ?? e).slice(0, 160));
     }
   }
+
+  // 2. Parse them in as FEW LLM requests as possible. Extraction — not
+  //    Firecrawl — is the binding constraint, and providers cap on requests as
+  //    well as tokens. One page per request wasted the request budget exactly
+  //    the way one job per request did in the scorer.
+  return extractFromPages(fetched, profile, config);
+}
+
+// Pages per LLM request, shaped by which limit binds for that provider:
+//   gemini — request-limited (20/day free) with a huge context, so pack pages in
+//   groq   — token-limited (12k/min), so one page at a time is already near the
+//            ceiling; batching there would only cause 413s
+//   anthropic — comfortable either way
+const PAGES_PER_REQUEST: Record<string, number> = {
+  gemini: 4,
+  groq: 1,
+  anthropic: 3,
+  heuristic: 0,
+};
+
+async function extractFromPages(
+  pages: { url: string; content: string }[],
+  profile: Profile,
+  config: Config,
+): Promise<Job[]> {
+  if (!pages.length || !hasLLM(config)) return [];
+
+  const provider = llmProvider(config);
+  const per = Math.max(1, PAGES_PER_REQUEST[provider] ?? 1);
+  const jobs: Job[] = [];
+  let requests = 0;
+
+  for (let i = 0; i < pages.length; i += per) {
+    const group = pages.slice(i, i + per);
+    try {
+      requests++;
+      const found = await extractGroup(group, config);
+      for (const [url, rows] of found) jobs.push(...toJobs(rows, url, profile));
+    } catch (e: unknown) {
+      if (isTerminalForRun(e)) {
+        console.error(`[scraped] provider rejected (${String((e as Error).message).slice(0, 100)}) — stopping extraction for this run`);
+        break;
+      }
+      // A group that fails for any other reason falls back to one page at a
+      // time, so one awkward page cannot cost us the whole group.
+      console.error(`[scraped] group of ${group.length} failed — retrying individually`);
+      for (const page of group) {
+        try {
+          requests++;
+          const one = await extractGroup([page], config);
+          for (const [url, rows] of one) jobs.push(...toJobs(rows, url, profile));
+        } catch (inner) {
+          if (isTerminalForRun(inner)) break;
+          console.error(`[scraped] ${page.url}: ${String((inner as Error)?.message ?? inner).slice(0, 120)}`);
+        }
+      }
+    }
+  }
+
+  console.error(
+    `[scraped] ${jobs.length} roles from ${pages.length} pages in ${requests} LLM request(s) via ${provider}`,
+  );
   return jobs;
 }
 
-// Career pages have no common markup, so the LLM does the parsing. Without a key
-// we skip rather than guess — a regex over arbitrary HTML produces garbage rows
-// that then pollute the shared pool.
-async function extractJobs(content: string, pageUrl: string, profile: Profile, config: Config): Promise<Job[]> {
-  if (!hasLLM(config)) return [];
+/**
+ * Parse one GROUP of career pages in a single LLM request.
+ *
+ * Career pages have no common markup, so the LLM does the parsing. Results come
+ * back keyed by page URL — never by array position — so a reordered or partial
+ * response still maps to the right company.
+ */
+async function extractGroup(
+  pages: { url: string; content: string }[],
+  config: Config,
+): Promise<Map<string, any[]>> {
+  const blocks = pages
+    .map(
+      (p, i) => `--- PAGE ${i + 1} ---
+url: ${p.url}
+${selectJobRegion(p.content, MAX_PAGE_CHARS)}`,
+    )
+    .join('\n\n');
 
-  const host = safeHost(pageUrl);
-  const prompt = `Extract every currently-open ENGINEERING job from this careers page.
+  const prompt = `Extract every currently-open ENGINEERING job from ${pages.length} careers page(s).
 
 Ignore non-engineering roles (sales, marketing, finance, HR, support, legal).
 Ignore anything that is not an actual open position (benefits copy, culture text, navigation).
-Do NOT invent roles. If the page lists no engineering openings, return {"jobs": []}.
+Do NOT invent roles. A page with no engineering openings gets an empty jobs array.
 
 For each role return:
 - title: the exact job title
@@ -60,24 +178,40 @@ For each role return:
 - url: the direct link to the role if the page gives one, otherwise ""
 - description: a 1-3 sentence factual summary of the role and its stack, from the page only
 
-PAGE (${pageUrl}):
-${selectJobRegion(content, MAX_PAGE_CHARS)}
+${blocks}
 
-Return ONLY JSON: {"jobs":[{"title":"","location":"","experience":"","url":"","description":""}]}`;
+Return ONLY JSON, one entry per page, using each page's "url" verbatim:
+{"pages":[{"url":"","jobs":[{"title":"","location":"","experience":"","url":"","description":""}]}]}`;
 
-  let parsed: any;
-  try {
-    parsed = await askForJobs(prompt, config, 0);
-  } catch (e) {
-    console.error(`[scraped] extraction failed for ${pageUrl}:`, String((e as Error)?.message ?? e).slice(0, 200));
-    return [];
+  const parsed = await askForJobs(prompt, config, 0);
+  const out = new Map<string, any[]>();
+  if (!parsed) return out;
+
+  // Preferred shape: grouped by page.
+  const groups: any[] = Array.isArray(parsed?.pages) ? parsed.pages : [];
+  for (const g of groups) {
+    const url = typeof g?.url === 'string' ? g.url : '';
+    if (!url) continue;
+    // Match loosely — models sometimes normalise a trailing slash.
+    const match = pages.find((p) => p.url === url || p.url.replace(/\/$/, '') === url.replace(/\/$/, ''));
+    if (match) out.set(match.url, Array.isArray(g.jobs) ? g.jobs : []);
   }
-  if (!parsed) return [];
 
+  // Fallback: a single-page group where the model ignored the wrapper and just
+  // returned {"jobs":[...]}. Unambiguous only when we asked about one page.
+  if (out.size === 0 && pages.length === 1 && Array.isArray(parsed?.jobs)) {
+    out.set(pages[0].url, parsed.jobs);
+  }
+
+  return out;
+}
+
+/** Turn extracted rows for one page into Job records. */
+function toJobs(rows: any[], pageUrl: string, _profile: Profile): Job[] {
+  const host = safeHost(pageUrl);
   const now = new Date().toISOString();
-  const rows: any[] = Array.isArray(parsed?.jobs) ? parsed.jobs : [];
 
-  return rows
+  return (rows ?? [])
     .filter((r) => typeof r?.title === 'string' && r.title.trim())
     .map((r): Job => {
       const url = absoluteUrl(String(r.url ?? ''), pageUrl);

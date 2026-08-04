@@ -41,6 +41,13 @@ export const config = {
   // Comma-separated career-page URLs to scrape for openings.
   scrapeCareerPages: (process.env.SCRAPE_CAREER_PAGES || '')
     .split(',').map((s) => s.trim()).filter(Boolean),
+  // Career pages are scraped FAR less often than the aggregators are fetched.
+  // Firecrawl's free tier is 1000 credits/month and one page costs one credit,
+  // so 24 pages on the hourly job schedule would be ~17,000 credits/month and
+  // die in two days. Once a day is ~720/month, which fits with headroom.
+  scrapeIntervalHours: Number(process.env.SCRAPE_INTERVAL_HOURS ?? 24),
+  // Hard ceiling per run, so a long target list cannot spike usage.
+  scrapeMaxPagesPerRun: Number(process.env.SCRAPE_MAX_PAGES_PER_RUN ?? 30),
 
   // ---- Auth ----
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
