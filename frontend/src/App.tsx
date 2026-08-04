@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { Health, User } from './api'
-import { getHealth, getMe, logout } from './api'
+import { API, getHealth, getMe, logout } from './api'
 import ProfileView from './components/ProfileView'
 import Dashboard from './components/Dashboard'
 import SignIn from './components/SignIn'
+import Onboarding from './components/Onboarding'
 import './styles/shell.css'
 
-type Tab = 'dashboard' | 'profile'
+// Three destinations, not two-plus-a-filter. Career-page jobs and aggregator
+// jobs are different kinds of supply — you work them differently — so they get
+// their own place in the nav rather than hiding behind a dropdown.
+type Tab = 'career-pages' | 'job-boards' | 'profile'
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'career-pages', label: 'Career pages' },
+  { id: 'job-boards', label: 'Job boards' },
   { id: 'profile', label: 'Profile' },
 ]
 
@@ -20,13 +25,77 @@ const AUTH_NOTICES: Record<string, string> = {
   state_mismatch: 'Sign-in expired or was tampered with. Please try again.',
 }
 
+const LLM_LABELS: Record<Health['llm'], string> = {
+  gemini: 'Gemini',
+  groq: 'Groq',
+  anthropic: 'Claude',
+  heuristic: 'Keyword scoring',
+}
+
+// Whether the setup checklist has been dismissed. A convenience flag only — if
+// storage is unavailable the checklist simply keeps showing.
+const SETUP_HIDDEN_KEY = 'jc.setup.hidden'
+
+function readSetupHidden(): boolean {
+  try {
+    return window.localStorage.getItem(SETUP_HIDDEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeSetupHidden(hidden: boolean): void {
+  try {
+    if (hidden) window.localStorage.setItem(SETUP_HIDDEN_KEY, '1')
+    else window.localStorage.removeItem(SETUP_HIDDEN_KEY)
+  } catch {
+    /* ignore: private-mode storage failures must not break the app */
+  }
+}
+
+// Status is deliberately understated. A working backend is the normal case and
+// should not shout; only an unreachable one gets colour and a border.
+function readStatus(
+  health: Health | null,
+  failed: boolean,
+): { tone: 'ok' | 'warn' | 'idle' | 'down'; text: string; title: string } {
+  if (failed) {
+    return {
+      tone: 'down',
+      text: 'Backend offline',
+      title: `Could not reach the API at ${API}. Nothing will load until it is back.`,
+    }
+  }
+  if (!health) {
+    return { tone: 'idle', text: 'Checking…', title: 'Checking the backend.' }
+  }
+  const boards = health.adzuna
+    ? 'Adzuna job board connected.'
+    : 'Adzuna job board not configured — career pages still work.'
+  if (health.llm === 'heuristic') {
+    return {
+      tone: 'warn',
+      text: 'Keyword scoring',
+      title: `No model key in use, so jobs are scored by keyword overlap. Add a key on the Profile tab for scores with reasons. ${boards}`,
+    }
+  }
+  return {
+    tone: 'ok',
+    text: `Scoring with ${LLM_LABELS[health.llm]}`,
+    title: `${LLM_LABELS[health.llm]} is reading each posting and explaining its score. ${boards}`,
+  }
+}
+
 export default function App() {
-  const [tab, setTab] = useState<Tab>('dashboard')
+  const [tab, setTab] = useState<Tab>('career-pages')
   const [health, setHealth] = useState<Health | null>(null)
   const [healthError, setHealthError] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [notice, setNotice] = useState<string | undefined>()
+  const [setupHidden, setSetupHidden] = useState(readSetupHidden)
+  // null until the checklist has worked out where the account stands.
+  const [setupDone, setSetupDone] = useState<boolean | null>(null)
 
   // Read (and then clear) the ?auth= flag the backend redirect adds, so a failed
   // sign-in explains itself and the query string does not linger in the URL.
@@ -56,7 +125,7 @@ export default function App() {
   const onSignOut = useCallback(async () => {
     await logout().catch(() => undefined)
     setUser(null)
-    setTab('dashboard')
+    setTab('career-pages')
   }, [])
 
   // Any request can 401 if the session expires mid-session; drop back to sign-in.
@@ -65,14 +134,36 @@ export default function App() {
     setNotice('Your session expired. Please sign in again.')
   }, [])
 
-  // Roving focus so the tablist behaves like one, not like two loose buttons.
+  // Deep link out of the checklist: land on the right destination and put focus
+  // on its tab so keyboard and screen-reader users travel with the click.
+  const goTo = useCallback((next: Tab) => {
+    setTab(next)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    requestAnimationFrame(() => document.getElementById(`shell-tab-${next}`)?.focus())
+  }, [])
+
+  const hideSetup = useCallback(() => {
+    setSetupHidden(true)
+    writeSetupHidden(true)
+  }, [])
+
+  const showSetup = useCallback(() => {
+    setSetupHidden(false)
+    writeSetupHidden(false)
+  }, [])
+
+  // Roving focus so the tablist behaves like one control, not three loose buttons.
   const onTabKeys = useCallback(
     (e: KeyboardEvent<HTMLElement>) => {
-      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
-      e.preventDefault()
       const i = TABS.findIndex((t) => t.id === tab)
-      const step = e.key === 'ArrowRight' ? 1 : TABS.length - 1
-      const next = TABS[(i + step) % TABS.length]
+      let target = -1
+      if (e.key === 'ArrowRight') target = (i + 1) % TABS.length
+      else if (e.key === 'ArrowLeft') target = (i - 1 + TABS.length) % TABS.length
+      else if (e.key === 'Home') target = 0
+      else if (e.key === 'End') target = TABS.length - 1
+      else return
+      e.preventDefault()
+      const next = TABS[target]
       setTab(next.id)
       document.getElementById(`shell-tab-${next.id}`)?.focus()
     },
@@ -82,14 +173,15 @@ export default function App() {
   if (!authChecked) {
     return (
       <div className="app shell-app">
-        <div className="shell-boot">
+        <div className="shell-boot" role="status" aria-live="polite">
           <div className="shell-boot-inner">
-            <p className="shell-boot-cmd">
-              <span className="si-prompt">$</span> job-copilot --boot
-            </p>
-            <p className="shell-boot-line">
-              Loading… <span className="shell-caret" aria-hidden="true" />
-            </p>
+            <span className="shell-mark shell-mark-lg" aria-hidden="true">
+              <BrandGlyph />
+            </span>
+            <p className="shell-boot-text">Opening your workspace…</p>
+            <span className="shell-boot-bar" aria-hidden="true">
+              <i />
+            </span>
           </div>
         </div>
       </div>
@@ -101,6 +193,7 @@ export default function App() {
   }
 
   const who = user.name || user.email
+  const status = readStatus(health, healthError)
 
   return (
     <div className="app shell-app">
@@ -108,21 +201,13 @@ export default function App() {
         <div className="shell-bar-inner">
           <div className="shell-brand">
             <span className="shell-mark" aria-hidden="true">
-              ◆
+              <BrandGlyph />
             </span>
-            <span className="shell-brand-text">
-              <span className="shell-wordmark">Job Copilot</span>
-              <span className="shell-brand-sub">job pipeline</span>
-            </span>
+            <span className="shell-wordmark">Job Copilot</span>
           </div>
 
-          <nav
-            className="shell-tabs"
-            role="tablist"
-            aria-label="Sections"
-            onKeyDown={onTabKeys}
-          >
-            {TABS.map((t, i) => (
+          <nav className="shell-tabs" role="tablist" aria-label="Sections" onKeyDown={onTabKeys}>
+            {TABS.map((t) => (
               <button
                 key={t.id}
                 id={`shell-tab-${t.id}`}
@@ -133,65 +218,35 @@ export default function App() {
                 tabIndex={tab === t.id ? 0 : -1}
                 onClick={() => setTab(t.id)}
               >
-                <span className="shell-tab-i" aria-hidden="true">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
                 {t.label}
               </button>
             ))}
           </nav>
 
-          <div className="shell-telemetry">
-            {healthError ? (
-              <span
-                className="shell-chip is-down"
-                title="Could not reach backend at localhost:4500"
-              >
-                <i className="shell-led" aria-hidden="true" />
-                <span className="shell-key">backend</span>
-                <span className="shell-val">offline</span>
-              </span>
-            ) : health ? (
-              <>
-                <span
-                  className={`shell-chip ${health.llm !== 'heuristic' ? 'is-on' : 'is-warn'}`}
-                  title={
-                    health.llm !== 'heuristic'
-                      ? `Scoring with ${health.llm} (LLM)`
-                      : 'Scoring heuristically — add a Gemini, Groq or Anthropic key for LLM scoring'
-                  }
-                >
-                  <i className="shell-led" aria-hidden="true" />
-                  <span className="shell-key">llm</span>
-                  <span className="shell-val">
-                    {health.llm !== 'heuristic' ? health.llm : 'heuristic'}
-                  </span>
-                </span>
-                <span
-                  className={`shell-chip ${health.adzuna ? 'is-on' : 'is-idle'}`}
-                  title={health.adzuna ? 'Adzuna source connected' : 'Adzuna not configured'}
-                >
-                  <i className="shell-led" aria-hidden="true" />
-                  <span className="shell-key">adzuna</span>
-                  <span className="shell-val">{health.adzuna ? 'on' : 'off'}</span>
-                </span>
-              </>
-            ) : (
-              <span className="shell-chip is-idle">
-                <i className="shell-led" aria-hidden="true" />
-                <span className="shell-key">health</span>
-                <span className="shell-val">checking…</span>
-              </span>
-            )}
-          </div>
+          <div className="shell-right">
+            {setupHidden && setupDone === false ? (
+              <button className="shell-resume" onClick={showSetup}>
+                Finish setup
+              </button>
+            ) : null}
 
-          <div className="shell-account">
+            <span
+              className="shell-status"
+              data-tone={status.tone}
+              title={status.title}
+              role="status"
+            >
+              <i className="shell-status-dot" aria-hidden="true" />
+              <span className="shell-status-text">{status.text}</span>
+            </span>
+
             <span className="shell-user" title={user.email}>
-              <span className="shell-user-avatar" aria-hidden="true">
+              <span className="shell-avatar" aria-hidden="true">
                 {who.slice(0, 1).toUpperCase()}
               </span>
               <span className="shell-user-name">{who}</span>
             </span>
+
             <button className="shell-signout" onClick={onSignOut}>
               Sign out
             </button>
@@ -199,18 +254,44 @@ export default function App() {
         </div>
       </header>
 
-      <main
-        className="content"
-        id="shell-panel"
-        role="tabpanel"
-        aria-labelledby={`shell-tab-${tab}`}
-      >
-        {tab === 'dashboard' ? (
-          <Dashboard onUnauthorized={onUnauthorized} />
-        ) : (
-          <ProfileView onUnauthorized={onUnauthorized} onAccountDeleted={onSignOut} />
-        )}
+      <main className="shell-main">
+        <Onboarding
+          hidden={setupHidden}
+          refreshKey={tab}
+          onHide={hideSetup}
+          onGo={goTo}
+          onStatus={setSetupDone}
+          onUnauthorized={onUnauthorized}
+        />
+
+        <div
+          className="shell-panel"
+          id="shell-panel"
+          role="tabpanel"
+          aria-labelledby={`shell-tab-${tab}`}
+        >
+          {tab === 'profile' ? (
+            <ProfileView onUnauthorized={onUnauthorized} onAccountDeleted={onSignOut} />
+          ) : (
+            <Dashboard key={tab} view={tab} onUnauthorized={onUnauthorized} />
+          )}
+        </div>
       </main>
     </div>
+  )
+}
+
+// A navigator's arrow: the product points you at the next thing worth doing.
+function BrandGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M12 3.5 19 20.5 12 16.6 5 20.5z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }

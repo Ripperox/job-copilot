@@ -1,80 +1,69 @@
 /* =============================================================================
-   Job Copilot — app shell + signed-out screen
-   Built on the primitives in styles/system.css. No new colours, no new fonts.
+   Job Copilot — app shell (top bar, destinations, page frame, boot)
+   Built on the tokens in styles/system.css. No new colours, no new fonts.
 
-   WHY IT LOOKS LIKE THIS
-   The old shell was a padded card with sans-serif copy and rounded status
-   badges — the shape of every generated dashboard. This layer replaces that
-   with the two devices the portfolio uses: an instrument-panel top rail
-   (hairline-divided regions, monospaced micro-labels, LED status readouts)
-   and the `$ command` idiom for anything that reports state.
+   WHY IT LOOKS LIKE THIS (v2)
+   v1 dressed the chrome as an instrument panel: LED status readouts, letter-
+   spaced monospaced micro-labels, a `$ command` boot screen, a faint grid over
+   every pixel. It photographed well and used badly — it made a tool people
+   open while anxious feel like equipment they might break.
 
-   Class names are all new (`shell-*` / `si-*`) so nothing here has to fight
-   the older rules in index.css.
+   This layer is the correction. The bar carries exactly what it did before —
+   brand, destinations, who is signed in, sign out, backend/LLM state — in
+   sentence-case sans, at a readable size, with the accent held back for the
+   one thing that is genuinely actionable. Status sits quiet and grey while the
+   backend is fine and only takes colour when it is not. The background is flat:
+   depth comes from one elevation step (bar over page, panel over bar), not
+   from texture.
+
+   Class names stay `shell-*` so nothing here fights the older rules in
+   index.css. The signed-out screen owns its own stylesheet (signin.css); the
+   `.si-*` rules that used to live here have gone with it, and SignIn no longer
+   borrows this bar.
    ============================================================================= */
 
-.shell-app,
-.si {
-  /* Local layout constants, derived — not new design tokens. */
-  --shell-bar-h: 52px;
-  --shell-gutter: 1.25rem;
-  --shell-max: 74rem;
-  /* ~1.8% white: the grid should register as texture, never as a grid. */
-  --shell-grid: color-mix(in srgb, var(--line-soft) 30%, transparent);
+.shell-app {
+  --bar-h: 56px;
 
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
-  font-family: var(--font-mono);
+  min-height: 100dvh;
+  font-family: var(--font-sans);
   color: var(--text);
-  background-color: var(--bg);
-  background-image:
-    linear-gradient(var(--shell-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--shell-grid) 1px, transparent 1px);
-  background-size: 48px 48px;
-  background-position: -1px -1px;
+  background: var(--bg);
 }
 
 /* -----------------------------------------------------------------------------
-   Top rail — shared by the signed-in shell and the signed-out screen so both
-   read as the same instrument.
+   Top bar
    -------------------------------------------------------------------------- */
 
 .shell-bar {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--bg-elev);
+  background: color-mix(in srgb, var(--bg-elev) 86%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
   border-bottom: 1px solid var(--line);
 }
 
-/* A short accent tick anchoring the rail's top-left corner. The only unprovoked
-   use of the accent in the chrome — a full-width accent bar reads as a template.
-   Hung off the inner box so it lands on the content column, not the viewport. */
-.shell-bar-inner::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 54px;
-  height: 2px;
-  background: var(--accent);
-}
+/* Brand / destinations / account, on equal flanks so the destinations sit on
+   the true centre line; either flank may outgrow its track if the signed-in
+   name is long.
 
+   The width is --page-max plus the 8rem-a-side that the views below are allowed
+   to bleed into (dashboard.css --dsh-bleed), so the brand sits on the same
+   vertical line as the content it sits over at every viewport. */
 .shell-bar-inner {
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  min-height: var(--shell-bar-h);
-  padding: 0 var(--shell-gutter);
-}
-
-/* On the signed-out page the rail lines up with the page column below it. */
-.si .shell-bar-inner {
-  max-width: var(--shell-max);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: calc(var(--page-max) + 16rem);
+  min-height: var(--bar-h);
   margin: 0 auto;
-}
-
-.si .shell-telemetry {
-  padding-right: 0;
+  padding: 0 var(--page-pad);
 }
 
 /* ---- brand ---- */
@@ -82,188 +71,174 @@
 .shell-brand {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding-right: 1rem;
-  flex: none;
+  gap: 0.55rem;
+  min-width: 0;
 }
 
 .shell-mark {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 27px;
+  height: 27px;
   flex: none;
-  border: 1px solid var(--accent-ring);
-  border-radius: 2px;
-  background: var(--accent-dim);
-  box-shadow: inset 0 0 12px rgba(var(--accent-rgb), 0.12);
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
+  background: linear-gradient(
+    152deg,
+    color-mix(in srgb, var(--accent) 22%, var(--panel-2)),
+    var(--panel-2) 70%
+  );
   color: var(--accent);
-  font-size: 11px;
-  line-height: 1;
 }
 
-.shell-brand-text {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
+.shell-mark-lg {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+}
+
+.shell-mark-lg svg {
+  width: 19px;
+  height: 19px;
 }
 
 .shell-wordmark {
-  font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 600;
-  letter-spacing: -0.015em;
-  line-height: 1;
+  letter-spacing: -0.02em;
   color: var(--text);
   white-space: nowrap;
 }
 
-.shell-brand-sub {
-  font-size: 8.5px;
-  line-height: 1;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--faint);
-  white-space: nowrap;
-}
-
-/* ---- tabs ---- */
+/* ---- destinations: a segmented control, not a tab strip of tiny caps ---- */
 
 .shell-tabs {
   display: flex;
-  align-items: stretch;
-  padding-left: 0.3rem;
-  border-left: 1px solid var(--line-soft);
+  align-items: center;
+  gap: 2px;
+  justify-self: center;
+  padding: 3px;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
 }
 
 .shell-tab {
   appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0 0.9rem;
+  padding: 0.36rem 0.85rem;
   background: transparent;
   border: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px; /* sit the underline on the rail's own hairline */
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
   color: var(--muted);
-  cursor: pointer;
   white-space: nowrap;
+  cursor: pointer;
   transition:
     color var(--fast) var(--ease),
+    background var(--fast) var(--ease);
+}
+
+.shell-tab:hover {
+  color: var(--text-dim);
+  background: var(--panel);
+}
+
+.shell-tab:focus-visible {
+  outline-offset: 1px;
+  border-radius: 999px;
+}
+
+/* Styling off the ARIA state rather than a parallel class keeps the two in sync.
+   The selected destination is elevated, not accented: green is reserved for
+   things you should act on. */
+.shell-tab[aria-selected='true'] {
+  color: var(--text);
+  background: var(--panel-2);
+  box-shadow: var(--shadow);
+}
+
+/* ---- right cluster ---- */
+
+.shell-right {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  justify-self: end;
+  min-width: 0;
+}
+
+/* The way back to a dismissed checklist. Only rendered while setup is unfinished,
+   so it is allowed the accent. */
+.shell-resume {
+  appearance: none;
+  flex: none;
+  padding: 0.3rem 0.7rem;
+  background: var(--accent-dim);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--accent);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
     background var(--fast) var(--ease),
     border-color var(--fast) var(--ease);
 }
 
-.shell-tab:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--line-soft) 45%, transparent);
+.shell-resume:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent-ring);
 }
 
-.shell-tab:focus-visible {
-  outline-offset: -4px;
-}
+/* ---- status: quiet by default, loud only when something is actually wrong ---- */
 
-.shell-tab-i {
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  color: var(--line-strong);
-  font-variant-numeric: tabular-nums;
-  transition: color var(--fast) var(--ease);
-}
-
-/* Styling off the ARIA state rather than a parallel class keeps the two in sync. */
-.shell-tab[aria-selected='true'] {
-  color: var(--accent);
-  background: var(--accent-dim);
-  border-bottom-color: var(--accent);
-}
-
-.shell-tab[aria-selected='true'] .shell-tab-i {
-  color: color-mix(in srgb, var(--accent) 55%, transparent);
-}
-
-/* ---- telemetry: LED + key + value, hairline-separated. Not badges. ---- */
-
-.shell-telemetry {
-  display: flex;
-  align-items: center;
-  margin-left: auto;
-  padding: 0 1rem;
-  border-left: 1px solid var(--line-soft);
-  min-width: 0;
-}
-
-.shell-chip {
+.shell-status {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  white-space: nowrap;
-  color: var(--muted);
-}
-
-.shell-chip + .shell-chip {
-  margin-left: 0.8rem;
-  padding-left: 0.8rem;
-  border-left: 1px solid var(--line-soft);
-}
-
-.shell-led {
-  width: 5px;
-  height: 5px;
+  gap: 0.42rem;
   flex: none;
-  background: currentColor;
-  box-shadow: 0 0 6px color-mix(in srgb, currentColor 60%, transparent);
+  padding: 0.24rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: default;
 }
 
-.shell-key {
-  font-size: 9.5px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--faint);
+.shell-status-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--faint);
 }
 
-.shell-val {
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: currentColor;
-  font-variant-numeric: tabular-nums;
+.shell-status[data-tone='ok'] .shell-status-dot {
+  background: var(--accent);
 }
 
-.shell-chip.is-on {
-  color: var(--accent);
+.shell-status[data-tone='warn'] .shell-status-dot {
+  background: var(--amber);
 }
-.shell-chip.is-warn {
-  color: var(--amber);
-}
-.shell-chip.is-down {
+
+.shell-status[data-tone='down'] {
   color: var(--red);
-}
-.shell-chip.is-idle {
-  color: var(--grey);
+  background: var(--red-bg);
+  border-color: color-mix(in srgb, var(--red) 28%, transparent);
 }
 
-/* Only a failed backend earns motion — it is a real alarm, not decoration. */
-.shell-chip.is-down .shell-led {
-  animation: jc-alarm 1.8s var(--ease) infinite;
+.shell-status[data-tone='down'] .shell-status-dot {
+  background: currentColor;
 }
 
 /* ---- account ---- */
-
-.shell-account {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding-left: 1rem;
-  border-left: 1px solid var(--line-soft);
-  min-width: 0;
-}
 
 .shell-user {
   display: flex;
@@ -272,26 +247,25 @@
   min-width: 0;
 }
 
-.shell-user-avatar {
+.shell-avatar {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   flex: none;
   border: 1px solid var(--line);
-  border-radius: 2px;
+  border-radius: 999px;
   background: var(--panel-2);
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11.5px;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.04em;
 }
 
 .shell-user-name {
-  font-size: 11px;
-  letter-spacing: 0.02em;
+  font-size: 13px;
   color: var(--text-dim);
-  max-width: 12rem;
+  max-width: 11rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -300,607 +274,173 @@
 .shell-signout {
   appearance: none;
   flex: none;
-  padding: 0.32rem 0.6rem;
+  padding: 0.32rem 0.66rem;
   background: transparent;
   border: 1px solid var(--line);
-  border-radius: 2px;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 12.5px;
   color: var(--muted);
+  white-space: nowrap;
   cursor: pointer;
   transition:
     color var(--fast) var(--ease),
+    background var(--fast) var(--ease),
     border-color var(--fast) var(--ease);
 }
 
 .shell-signout:hover {
-  color: var(--accent);
-  border-color: var(--accent-ring);
+  color: var(--text);
+  background: var(--panel);
+  border-color: var(--line-strong);
 }
 
 /* -----------------------------------------------------------------------------
-   Boot screen — the auth check, said out loud.
+   Page frame — fills the viewport instead of stopping two-thirds down
+   -------------------------------------------------------------------------- */
+
+.shell-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  flex: 1;
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 1.6rem var(--page-pad) 4rem;
+}
+
+.shell-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Boot — the auth check. One line, no costume.
    -------------------------------------------------------------------------- */
 
 .shell-boot {
   display: grid;
   place-items: center;
-  min-height: 100vh;
-  padding: 2rem var(--shell-gutter);
+  flex: 1;
+  min-height: 100dvh;
+  padding: 2rem var(--page-pad);
 }
 
 .shell-boot-inner {
-  width: 100%;
-  max-width: 24rem;
-}
-
-.shell-boot-cmd {
-  display: flex;
-  gap: 0.5rem;
-  margin: 0;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--text-dim);
-}
-
-.shell-boot-line {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0.5rem 0 0;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  color: var(--muted);
-}
-
-.shell-caret {
-  display: inline-block;
-  width: 7px;
-  height: 13px;
-  background: var(--accent);
-  animation: jc-caret 1s step-end infinite;
-}
-
-/* -----------------------------------------------------------------------------
-   Signed-out screen
-   -------------------------------------------------------------------------- */
-
-.si {
   display: flex;
   flex-direction: column;
-  position: relative;
-}
-
-.si-main {
-  flex: 1;
-  width: 100%;
-  max-width: var(--shell-max);
-  margin: 0 auto;
-  padding: 2.75rem var(--shell-gutter) 3.5rem;
-  display: grid;
-  gap: 2rem;
-  /* One column until there is genuinely room for two; collapses cleanly when
-     the demo job has not loaded and the pitch is the only child. */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
-  align-items: start;
-  align-content: start; /* don't let auto rows stretch on a tall viewport */
-}
-
-.si-pitch {
-  min-width: 0;
-  max-width: 44rem;
-  /* The pipeline rail reflows off this column's width, not the viewport's —
-     it sits in a half-width column on desktop and full width on a phone. */
-  container-type: inline-size;
+  align-items: center;
+  gap: 0.95rem;
   animation: rise var(--base) var(--ease) both;
 }
 
-.si-title {
-  margin: 1.1rem 0 0;
-  font-family: var(--font-display);
-  font-size: clamp(1.85rem, 5.4vw, 2.9rem);
-  font-weight: 700;
-  line-height: 1.04;
-  letter-spacing: -0.035em;
-  color: var(--text);
-}
-
-.si-title-accent {
-  display: block;
-  color: var(--accent);
-  text-shadow: 0 0 30px color-mix(in srgb, var(--accent) 26%, transparent);
-}
-
-.si-sub {
-  margin: 1.1rem 0 0;
-  max-width: 56ch;
-  font-size: 12.5px;
-  line-height: 1.8;
-  color: var(--muted);
-}
-
-.si-sub-lede {
-  color: var(--text-dim);
-}
-
-/* ---- pipeline rail: the product's five steps, as segmented cells ---- */
-
-.si-pipe {
-  list-style: none;
-  margin: 1.5rem 0 0;
-  padding: 0;
-  display: grid;
-  /* Fixed at five so a wrap can never leave an empty cell in the rail. */
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--line-soft);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.si-pipe-step {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.7rem 0.75rem;
-  background: var(--panel-2);
-}
-
-.si-pipe-i {
-  font-size: 9px;
-  letter-spacing: 0.2em;
-  color: var(--line-strong);
-  font-variant-numeric: tabular-nums;
-}
-
-.si-pipe-k {
-  font-size: 10.5px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-
-.si-pipe-v {
-  font-size: 10px;
-  letter-spacing: 0.02em;
-  color: var(--faint);
-}
-
-/* The one step that is not automated. */
-.si-pipe-step.is-manual {
-  background: color-mix(in srgb, var(--accent) 9%, var(--panel-2));
-}
-
-.si-pipe-step.is-manual .si-pipe-k {
-  color: var(--accent);
-}
-
-/* Too narrow for five across — become an enumerated readout instead. Keyed to
-   the column, not the viewport, because this sits in a half-width column on
-   desktop and a full-width one on a phone. */
-@container (max-width: 25rem) {
-  .si-pipe {
-    grid-template-columns: 1fr;
-  }
-
-  .si-pipe-step {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 0.7rem;
-    padding: 0.5rem 0.75rem;
-  }
-
-  .si-pipe-i {
-    flex: none;
-    width: 1.3rem;
-  }
-
-  .si-pipe-k {
-    flex: none;
-    width: 4.4rem;
-  }
-}
-
-.si-pipe-note {
-  display: flex;
-  gap: 0.5rem;
-  margin: 0.7rem 0 0;
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--text-dim);
-}
-
-.si-pipe-note::before {
-  content: '↳';
-  color: var(--accent);
-  flex: none;
-}
-
-/* ---- call to action ---- */
-
-.si-cta {
-  appearance: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  width: 100%;
-  max-width: 22rem;
-  margin: 1.6rem 0 0;
-  padding: 0.85rem 1.1rem;
-  background: var(--accent-dim);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
-  color: var(--accent);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition:
-    background var(--base) var(--ease),
-    box-shadow var(--base) var(--ease),
-    transform var(--fast) var(--ease);
-}
-
-.si-cta:hover {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
-  box-shadow: var(--glow);
-}
-
-.si-cta:active {
-  transform: translateY(1px);
-}
-
-.si-cta-arrow {
-  flex: none;
-  transition: transform var(--base) var(--ease);
-}
-
-.si-cta:hover .si-cta-arrow {
-  transform: translateX(3px);
-}
-
-.si-cta-note {
-  margin: 0.6rem 0 0;
-  font-size: 9.5px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-
-.si-notice {
-  display: flex;
-  gap: 0.6rem;
-  margin: 1.5rem 0 0;
-  padding: 0.7rem 0.85rem;
-  background: var(--amber-bg);
-  border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
-  border-left-width: 2px;
-  border-radius: var(--radius-sm);
-  font-size: 11.5px;
-  line-height: 1.7;
-  color: var(--amber);
-}
-
-.si-notice::before {
-  content: '!';
-  flex: none;
-  font-weight: 700;
-}
-
-.si-fine {
-  margin: 1.75rem 0 0;
-  padding-top: 1.1rem;
-  border-top: 1px solid var(--line-soft);
-  max-width: 54ch;
-  font-size: 10.5px;
-  line-height: 1.75;
-  color: var(--faint);
-}
-
-/* -----------------------------------------------------------------------------
-   The demo job, presented as a live readout rather than a preview card.
-   -------------------------------------------------------------------------- */
-
-.si-demo {
-  position: relative; /* corner-frame ticks hang off this */
-  min-width: 0;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 24px 60px -32px rgba(0, 0, 0, 0.95);
-  animation: rise var(--base) var(--ease) 60ms both;
-}
-
-.si-demo-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.55rem 0.8rem;
-  background: var(--panel-2);
-  border-bottom: 1px solid var(--line);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-}
-
-.si-demo-path {
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.si-demo-src {
-  margin-left: auto;
-  flex: none;
-  padding: 0.15rem 0.4rem;
-  border: 1px solid var(--line-soft);
-  border-radius: 2px;
-  font-size: 9px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--faint);
-  white-space: nowrap;
-  max-width: 9rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.si-demo-body {
-  padding: 0.9rem 0.95rem 1.05rem;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.si-line {
-  display: flex;
-  gap: 0.5rem;
+.shell-boot-text {
   margin: 0;
-}
-
-.si-line-cmd {
-  color: var(--text-dim);
-}
-
-.si-line-sys {
-  font-size: 11px;
-  color: var(--faint);
-}
-
-.si-prompt {
-  flex: none;
-  color: var(--accent);
-}
-
-.si-job {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.9rem;
-  margin-top: 0.95rem;
-  padding-top: 0.95rem;
-  border-top: 1px dashed var(--line-soft);
-}
-
-.si-score-wrap {
-  flex: none;
-  width: 3.6rem;
-  text-align: center;
+  font-size: 13.5px;
   color: var(--muted);
 }
 
-.si-score-wrap.is-high {
-  color: var(--accent);
-}
-
-.si-score {
+.shell-boot-bar {
   display: block;
-  font-family: var(--font-display);
-  font-size: 2rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.045em;
-  font-variant-numeric: tabular-nums;
-  color: currentColor;
-}
-
-.si-score-wrap.is-high .si-score {
-  text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 32%, transparent);
-}
-
-.si-score-cap {
-  display: block;
-  margin-top: 0.35rem;
-  font-size: 9px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-
-.si-meter {
-  display: block;
+  width: 132px;
   height: 2px;
-  margin-top: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
   background: var(--line);
 }
 
-.si-meter > i {
+.shell-boot-bar > i {
   display: block;
+  width: 38%;
   height: 100%;
-  background: currentColor;
-  box-shadow: 0 0 8px color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 999px;
+  background: var(--accent);
+  animation: shell-slide 1.5s var(--ease) infinite;
 }
 
-.si-job-id {
-  min-width: 0;
-}
-
-.si-job-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.015em;
-  color: var(--text);
-}
-
-.si-job-meta {
-  margin-top: 0.35rem;
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-}
-
-.si-job-co {
-  color: var(--text-dim);
-}
-
-.si-reason {
-  display: flex;
-  gap: 0.5rem;
-  margin: 0.9rem 0 0;
-  font-size: 11.5px;
-  line-height: 1.75;
-  color: var(--text-dim);
-}
-
-.si-reason::before {
-  content: '//';
-  flex: none;
-  color: var(--accent);
-}
-
-.si-demo-foot {
-  padding: 0.6rem 0.85rem;
-  background: var(--panel-2);
-  border-top: 1px solid var(--line);
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  font-size: 10.5px;
-  line-height: 1.65;
-  color: var(--faint);
-  margin: 0;
+@keyframes shell-slide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(370%);
+  }
 }
 
 /* -----------------------------------------------------------------------------
-   Narrow — the rail restacks into three instrument rows and still fits 360px.
+   Narrow — the bar becomes two rows: identity, then destinations full width
    -------------------------------------------------------------------------- */
 
-@media (max-width: 900px) {
+@media (max-width: 880px) {
   .shell-bar-inner {
-    flex-wrap: wrap;
-    min-height: 0;
-    padding: 0 1rem;
+    grid-template-columns: auto 1fr;
+    row-gap: 0;
+    padding: 0 1rem 0.55rem;
   }
 
   .shell-brand {
-    order: 1;
-    height: 48px;
+    grid-row: 1;
+    height: 52px;
   }
 
-  .shell-account {
-    order: 2;
-    margin-left: auto;
-    height: 48px;
-    padding-left: 0;
-    border-left: 0;
+  .shell-right {
+    grid-row: 1;
+    grid-column: 2;
+    gap: 0.5rem;
   }
 
   .shell-tabs {
-    order: 3;
-    width: 100%;
-    height: 40px;
-    padding-left: 0;
-    border-left: 0;
-    border-top: 1px solid var(--line-soft);
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-self: stretch;
   }
 
   .shell-tab {
     flex: 1;
-    justify-content: center;
-    padding: 0 0.5rem;
+    text-align: center;
   }
 
-  .shell-telemetry {
-    order: 4;
-    width: 100%;
-    height: 34px;
-    margin-left: 0;
-    padding: 0;
-    border-left: 0;
-    border-top: 1px solid var(--line-soft);
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .shell-telemetry::-webkit-scrollbar {
-    display: none;
+  .shell-main {
+    padding: 1.25rem 1rem 3rem;
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 620px) {
   .shell-user-name {
     display: none;
   }
 
-  .si-main {
-    padding: 1.75rem 1rem 2.5rem;
+  /* A healthy backend needs no words on a phone; a broken one does. Clipped
+     rather than removed, so the reading stays in the accessibility tree. */
+  .shell-status:not([data-tone='down']) .shell-status-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
-  .si-job {
-    gap: 0.7rem;
+  .shell-status:not([data-tone='down']) {
+    padding: 0.24rem 0.3rem;
   }
 
-  .si-score-wrap {
-    width: 3rem;
-  }
-
-  .si-score {
-    font-size: 1.7rem;
-  }
-}
-
-/* -----------------------------------------------------------------------------
-   Motion
-   -------------------------------------------------------------------------- */
-
-@keyframes jc-caret {
-  0%,
-  49% {
-    opacity: 1;
-  }
-  50%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes jc-alarm {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
+  .shell-tab {
+    padding: 0.36rem 0.5rem;
+    font-size: 12.5px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shell-caret,
-  .shell-chip.is-down .shell-led,
-  .si-pitch,
-  .si-demo {
+  .shell-boot-inner {
     animation: none;
   }
 
-  .si-cta:active {
-    transform: none;
+  .shell-boot-bar > i {
+    width: 100%;
+    animation: none;
   }
 }

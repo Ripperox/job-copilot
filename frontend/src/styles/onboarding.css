@@ -1,0 +1,446 @@
+/* =============================================================================
+   Job Copilot — first-run setup checklist
+   Built on the tokens in styles/system.css. No new colours, no new fonts.
+
+   WHY IT LOOKS LIKE THIS
+   The thing being fixed is "I don't know what to do", and the fix for that is
+   not a wizard — it is a list of three sentences that stays out of the way.
+   So: no modal, no overlay, no step counter marching across a progress bar, no
+   celebration when it finishes. It just stops being there.
+
+   The one piece of ornament is the hairline rail threading the three markers.
+   It carries the only thing a progress bar would have said — how far along you
+   are — and it says it by tinting the segments you have already passed, in the
+   margin, where it can be ignored.
+
+   Prose is sans. Mono appears only where there is data: character counts, job
+   counts, the masked key, the step numerals.
+   ============================================================================= */
+
+.ob {
+  /* The dashboard widens itself past the shell's page column by exactly this
+     much (see --dsh-bleed in dashboard.css). Matching the expression keeps the
+     card's edges on the same line as the view underneath it at every width,
+     and both collapse to zero on a small screen. */
+  --ob-bleed: clamp(0px, (100vw - 3rem - 100%) / 2, 8rem);
+  margin-inline: calc(-1 * var(--ob-bleed));
+
+  position: relative;
+  padding: 1.15rem 1.3rem 1.3rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  /* A breath of accent at the top edge — enough to read as a greeting, not
+     enough to compete with the actual call to action. */
+  background: linear-gradient(
+    175deg,
+    color-mix(in srgb, var(--accent) 3.5%, var(--panel)),
+    var(--panel) 42%
+  );
+  box-shadow: var(--shadow);
+  animation: rise var(--base) var(--ease) both;
+}
+
+/* ---- header ---- */
+
+.ob-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  margin-bottom: 1.15rem;
+}
+
+.ob-head-text {
+  min-width: 0;
+}
+
+.ob-title {
+  margin: 0;
+  font-size: 1.06rem;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  color: var(--text);
+}
+
+.ob-sub {
+  margin: 0.34rem 0 0;
+  max-width: 62ch;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.ob-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-left: auto;
+  flex: none;
+}
+
+.ob-count {
+  font-size: 12.5px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.ob-hide {
+  appearance: none;
+  padding: 0.28rem 0.6rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color var(--fast) var(--ease),
+    background var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.ob-hide:hover {
+  color: var(--text);
+  background: var(--panel-2);
+  border-color: var(--line);
+}
+
+/* ---- steps ---- */
+
+.ob-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ob-step {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding-bottom: 1.15rem;
+  animation: rise var(--base) var(--ease) both;
+}
+
+.ob-step:last-child {
+  padding-bottom: 0;
+}
+
+/* The rail. Tinted where the step behind it is finished. */
+.ob-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 12.5px;
+  top: 30px;
+  bottom: 6px;
+  width: 1.5px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.ob-step.is-done:not(:last-child)::before {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.ob-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1;
+}
+
+.ob-step.is-next .ob-mark {
+  border-color: color-mix(in srgb, var(--text-dim) 70%, transparent);
+  color: var(--text);
+}
+
+.ob-step.is-done .ob-mark {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* ---- step body ---- */
+
+.ob-body {
+  flex: 1;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.ob-h {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.008em;
+  color: var(--text);
+}
+
+.ob-step.is-done .ob-h,
+.ob-step.is-skipped .ob-h {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.ob-opt {
+  flex: none;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--grey-bg);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.ob-why {
+  margin: 0.3rem 0 0;
+  max-width: 68ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* A settled step drops its argument and keeps its receipt: the list gets
+   shorter as you work down it, which is the whole reward on offer here. */
+.ob-step.is-done .ob-why,
+.ob-step.is-skipped .ob-why,
+.ob-step.is-done .ob-honest,
+.ob-step.is-skipped .ob-honest {
+  display: none;
+}
+
+/* The honest caveat about skipping the key. Set apart so it reads as the
+   product levelling with you rather than as more marketing. */
+.ob-honest {
+  margin: 0.5rem 0 0;
+  padding-left: 0.7rem;
+  max-width: 68ch;
+  border-left: 2px solid var(--line-strong);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.ob-state {
+  margin: 0.42rem 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+.ob-step.is-done .ob-state {
+  color: color-mix(in srgb, var(--accent) 55%, var(--text-dim));
+}
+
+/* Screen readers get the state in words; sighted users get it from the marker. */
+.ob-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- actions ---- */
+
+.ob-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+  align-self: center;
+}
+
+.ob-go {
+  appearance: none;
+  padding: 0.42rem 0.8rem;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--on-accent);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.ob-go:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* Everything that is not the next thing to do. */
+.ob-go.is-quiet {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--text-dim);
+}
+
+.ob-go.is-quiet:hover {
+  background: var(--panel-2);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.ob-skip {
+  appearance: none;
+  padding: 0.42rem 0.4rem;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--faint);
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  transition: color var(--fast) var(--ease);
+}
+
+.ob-skip:hover {
+  color: var(--text-dim);
+}
+
+/* ---- loading / error ---- */
+
+.ob-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.ob-skel {
+  display: block;
+}
+
+.ob-skel-title {
+  width: 16rem;
+  max-width: 70%;
+  height: 18px;
+}
+
+.ob-skel-row {
+  height: 34px;
+}
+
+.ob-quiet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--panel);
+}
+
+.ob-quiet .ob-why {
+  margin: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Wide — the pitch holds still on the left while the list works down the right.
+   It fills the width without stretching a 60ch sentence across 1200px, and it
+   keeps every action button next to the step it belongs to.
+   -------------------------------------------------------------------------- */
+
+@media (min-width: 62rem) {
+  .ob {
+    display: grid;
+    grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+    gap: 1rem 3.25rem;
+    padding: 1.45rem 1.5rem 1.55rem;
+  }
+
+  /* Column, so the count and the dismiss can settle on the floor of the card
+     instead of leaving a hole under the pitch. */
+  .ob-head {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    margin-bottom: 0;
+  }
+
+  .ob-title {
+    font-size: 1.12rem;
+  }
+
+  .ob-meta {
+    display: flex;
+    justify-content: space-between;
+    width: auto;
+    margin: 1.5rem 0 0;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .ob-head .ob-meta {
+    margin-top: auto;
+  }
+
+  .ob-hide {
+    margin-right: -0.6rem;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Narrow — the action drops under the sentence it belongs to, still on the rail
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .ob {
+    padding: 1rem 1rem 1.1rem;
+  }
+
+  .ob-head {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .ob-meta {
+    margin-left: 0;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .ob-hide {
+    margin-right: -0.6rem;
+  }
+
+  .ob-step {
+    flex-wrap: wrap;
+  }
+
+  /* Padding rather than a margin: a wrapped flex item at width:100% plus a
+     left margin overflows the row by exactly that margin. */
+  .ob-actions {
+    width: 100%;
+    margin-top: 0.65rem;
+    padding-left: calc(26px + 0.85rem);
+    align-self: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ob,
+  .ob-step {
+    animation: none;
+  }
+}

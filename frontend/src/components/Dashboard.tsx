@@ -1,8 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { JobStatus, ScoredJob } from '../api'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import type { JobStatus, ScoredJob, SourceInfo } from '../api'
 import { JOB_STATUSES, UnauthorizedError, fetchJobs, getJobs, getSources, rescoreJobs } from '../api'
 import JobCard from './JobCard'
+import DashError, { describeError } from './DashError'
+import type { DashErrorInfo } from './DashError'
+import DashRunPanel, { formatElapsed } from './DashRunPanel'
+import type { RunPhase } from './DashRunPanel'
+import DashSkeleton from './DashSkeleton'
 import '../styles/dashboard.css'
+
+// Two dashboards, one component — because the data plumbing is identical and the
+// presentation is not. Career pages are a short, high-value reading list; job
+// boards are a long queue to triage. They are laid out, worded and paced
+// differently on purpose, and neither is a filter tab on the other.
 
 const SCORE_OPTIONS = [0, 50, 60, 70, 80]
 
@@ -16,64 +27,116 @@ const STATUS_LABELS: Record<JobStatus, string> = {
 
 type StatusFilter = 'all' | JobStatus
 
-// The source key the backend uses for company career pages — the differentiated
-// supply, so it gets the accent marker in the source strip.
+/** The backend's source key for roles read off company career pages. */
 const CAREER_PAGES = 'scraped'
 
-function sourceLabelFor(name: string): string {
-  if (name === '') return 'all'
-  return name === CAREER_PAGES ? 'career-pages' : name
+type Note = { title: string; line: string; meta: string }
+
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return null
+  return Math.floor((Date.now() - t) / 86_400_000)
 }
 
-export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => void }) {
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return null
+  }
+}
+
+function freshLabel(days: number): string {
+  if (days <= 0) return 'Posted today'
+  if (days === 1) return 'Posted yesterday'
+  return `Posted ${days} days ago`
+}
+
+export default function Dashboard({
+  view,
+  onUnauthorized,
+}: {
+  view: 'career-pages' | 'job-boards'
+  onUnauthorized?: () => void
+}) {
+  const career = view === 'career-pages'
+  const uid = useId()
+
   const [minScore, setMinScore] = useState(50)
-  // '' = every source; 'scraped' = the career-pages view.
-  const [sourceFilter, setSourceFilter] = useState('')
-  const [sourceCounts, setSourceCounts] = useState<{ name: string; count: number }[]>([])
   const [jobs, setJobs] = useState<ScoredJob[]>([])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [loadingList, setLoadingList] = useState(true)
-  const [fetching, setFetching] = useState(false)
-  const [rescoring, setRescoring] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<DashErrorInfo | null>(null)
+  const [actionError, setActionError] = useState<{
+    info: DashErrorInfo
+    retry: () => void
+  } | null>(null)
+  const [phase, setPhase] = useState<RunPhase>('idle')
+  const [note, setNote] = useState<Note | null>(null)
+  const [sources, setSources] = useState<SourceInfo | null>(null)
 
-  const loadJobs = useCallback(async (score: number) => {
-    setLoadingList(true)
-    setError(null)
-    try {
-      const list = await getJobs(score, sourceRef.current)
-      setJobs(list)
-    } catch (err: unknown) {
-      if (err instanceof UnauthorizedError) return onUnauthorized?.()
-      setError(err instanceof Error ? err.message : 'Failed to load jobs')
-    } finally {
-      setLoadingList(false)
-    }
-  }, [onUnauthorized])
+  // Guards against a slow response from the view you just left overwriting the
+  // list of the view you are now looking at.
+  const reqId = useRef(0)
 
-  // Keep the current source in a ref so loadJobs stays stable and the existing
-  // callers (fetch, rescore, filter changes) do not all need rewiring.
-  const sourceRef = useRef('')
+  const load = useCallback(
+    async (score: number) => {
+      const id = ++reqId.current
+      setLoading(true)
+      setLoadError(null)
+      try {
+        // getJobs takes one source, so career pages filter server-side and the
+        // boards view subtracts them client-side.
+        const list = career
+          ? await getJobs(score, CAREER_PAGES)
+          : (await getJobs(score)).filter((j) => j.source !== CAREER_PAGES)
+        if (id !== reqId.current) return
+        setJobs(list)
+      } catch (err: unknown) {
+        if (err instanceof UnauthorizedError) {
+          onUnauthorized?.()
+          return
+        }
+        if (id !== reqId.current) return
+        setLoadError(describeError(err, 'load'))
+      } finally {
+        if (id === reqId.current) setLoading(false)
+      }
+    },
+    [career, onUnauthorized],
+  )
+
+  // A different dashboard is a different product, not a filtered view of this
+  // one — start it clean. Declared before the loader so it wins the render.
   useEffect(() => {
-    sourceRef.current = sourceFilter
-  }, [sourceFilter])
+    setStatusFilter('all')
+    setJobs([])
+    setNote(null)
+    setActionError(null)
+  }, [view])
 
   useEffect(() => {
-    void loadJobs(minScore)
-  }, [minScore, sourceFilter, loadJobs])
+    void load(minScore)
+  }, [load, minScore])
 
   useEffect(() => {
     let active = true
     getSources()
-      .then((s) => active && setSourceCounts(s.sources))
+      .then((s) => active && setSources(s))
       .catch(() => undefined)
     return () => {
       active = false
     }
   }, [jobs.length])
 
-  // Local-state updates keep the summary bar + tabs accurate without a refetch.
+  useEffect(() => {
+    if (!note) return
+    const id = window.setTimeout(() => setNote(null), 9000)
+    return () => window.clearTimeout(id)
+  }, [note])
+
+  // Local updates keep the counts honest without a refetch.
   const handleUpdated = useCallback((updated: ScoredJob) => {
     setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)))
   }, [])
@@ -81,6 +144,73 @@ export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => v
   const handleDismissed = useCallback((id: string) => {
     setJobs((prev) => prev.filter((j) => j.id !== id))
   }, [])
+
+  async function handleFetch() {
+    setPhase('fetching')
+    setActionError(null)
+    setNote(null)
+    const startedAt = Date.now()
+    try {
+      const result = await fetchJobs()
+      const secs = Math.round((Date.now() - startedAt) / 1000)
+      const from =
+        result.sources.length > 0 ? result.sources.join(', ') : 'your sources'
+      setNote({
+        title: 'Fetch finished',
+        line:
+          result.scored > 0
+            ? `Scored ${result.scored} new ${result.scored === 1 ? 'posting' : 'postings'} from ${from}.`
+            : `Nothing new from ${from} this time — everything on offer was already in your pool.`,
+        meta: `${result.total} in the pool · ${formatElapsed(secs)}`,
+      })
+      await load(minScore)
+    } catch (err: unknown) {
+      if (err instanceof UnauthorizedError) {
+        onUnauthorized?.()
+        return
+      }
+      const info = describeError(err, 'fetch')
+      setActionError({
+        info,
+        retry: info.prefersReload
+          ? () => void load(minScore)
+          : () => void handleFetch(),
+      })
+    } finally {
+      setPhase('idle')
+    }
+  }
+
+  async function handleRescore() {
+    setPhase('rescoring')
+    setActionError(null)
+    setNote(null)
+    const startedAt = Date.now()
+    try {
+      const result = await rescoreJobs()
+      const secs = Math.round((Date.now() - startedAt) / 1000)
+      setNote({
+        title: 'Re-scoring finished',
+        line: `Re-scored ${result.rescored} ${result.rescored === 1 ? 'job' : 'jobs'} against your current profile.`,
+        meta: formatElapsed(secs),
+      })
+      await load(minScore)
+    } catch (err: unknown) {
+      if (err instanceof UnauthorizedError) {
+        onUnauthorized?.()
+        return
+      }
+      const info = describeError(err, 'rescore')
+      setActionError({
+        info,
+        retry: info.prefersReload
+          ? () => void load(minScore)
+          : () => void handleRescore(),
+      })
+    } finally {
+      setPhase('idle')
+    }
+  }
 
   const counts = useMemo(() => {
     const base: Record<JobStatus, number> = {
@@ -95,307 +225,475 @@ export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => v
   }, [jobs])
 
   const visibleJobs = useMemo(
-    () =>
-      statusFilter === 'all'
-        ? jobs
-        : jobs.filter((j) => j.status === statusFilter),
+    () => (statusFilter === 'all' ? jobs : jobs.filter((j) => j.status === statusFilter)),
     [jobs, statusFilter],
   )
 
-  // Telemetry only — derived from state already on screen, no extra requests.
+  const freshCount = useMemo(
+    () =>
+      jobs.filter((j) => {
+        const d = daysSince(j.postedAt ?? j.createdAt)
+        return d !== null && d <= 7
+      }).length,
+    [jobs],
+  )
+
+  const boardSources = useMemo(
+    () => (sources?.sources ?? []).filter((s) => s.name !== CAREER_PAGES),
+    [sources],
+  )
+
   const inPlay = counts.outreach + counts.applied + counts.interview
-  const srcLabel = sourceLabelFor(sourceFilter)
-  const busy = fetching || rescoring
+  const scrapingOn = sources ? sources.scrapers.some((s) => s.configured) : true
+  const poolForView = career
+    ? (sources?.sources ?? []).find((s) => s.name === CAREER_PAGES)?.count ?? 0
+    : boardSources.reduce((n, s) => n + s.count, 0)
 
-  async function handleFetch() {
-    setFetching(true)
-    setError(null)
-    setToast(null)
-    try {
-      const result = await fetchJobs()
-      const sources =
-        result.sources.length > 0 ? result.sources.join(', ') : 'sources'
-      setToast(
-        `Fetched from ${sources} (${result.total}) · scored ${result.scored}`,
-      )
-      await loadJobs(minScore)
-      window.setTimeout(() => setToast(null), 5000)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch jobs')
-    } finally {
-      setFetching(false)
-    }
-  }
+  const listId = `${uid}-list`
 
-  async function handleRescore() {
-    setRescoring(true)
-    setError(null)
-    setToast(null)
-    try {
-      const result = await rescoreJobs()
-      setToast(`Re-scored ${result.rescored} jobs`)
-      await loadJobs(minScore)
-      window.setTimeout(() => setToast(null), 5000)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to re-score jobs')
-    } finally {
-      setRescoring(false)
-    }
-  }
+  // ---- controls (same two filters in both views, laid out differently) ----
 
-  return (
-    <div className="dsh">
-      {/* ---- 01 · command deck ------------------------------------------- */}
-      <div className="dsh-sechead">
-        <span className="dsh-secidx">01</span>
-        <span className="dsh-secrule" />
-        <span className="dsh-seccmd">$ fetch --score</span>
-      </div>
+  const statusChoices = career
+    ? JOB_STATUSES.filter((s) => counts[s] > 0 || s === statusFilter)
+    : JOB_STATUSES
 
-      <div className="dsh-deck corner-frame">
-        <button
-          type="button"
-          className="dsh-run"
-          onClick={handleFetch}
-          disabled={fetching || rescoring}
-        >
-          <span className="dsh-run-glyph" aria-hidden="true">
-            ▸
-          </span>
-          {fetching ? 'Fetching & scoring…' : 'Fetch & score jobs'}
-        </button>
-
-        <button
-          type="button"
-          className="dsh-btn"
-          onClick={handleRescore}
-          disabled={fetching || rescoring || jobs.length === 0}
-          title="Re-score all fetched jobs against your current profile (e.g. after adding an API key)"
-        >
-          {rescoring ? 'Re-scoring…' : 'Re-score'}
-        </button>
-
-        {busy && (
-          <span className="dsh-busy">
-            <span className="live-dot" aria-hidden="true" />
-            running
-          </span>
-        )}
-
-        <label className="dsh-field">
-          <span className="dsh-field-label">Min score</span>
-          <span className="dsh-field-ctl">
-            <select
-              className="dsh-select"
-              value={minScore}
-              onChange={(e) => setMinScore(Number(e.target.value))}
-            >
-              {SCORE_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s === 0 ? 'All' : `${s}+`}
-                </option>
-              ))}
-            </select>
-          </span>
-        </label>
-      </div>
-
-      {toast && (
-        <div className="dsh-log dsh-log-ok" role="status">
-          <span className="dsh-log-tag">ok</span>
-          <span className="dsh-log-msg">{toast}</span>
-        </div>
-      )}
-      {error && (
-        <div className="dsh-log dsh-log-err" role="alert">
-          <span className="dsh-log-tag">err</span>
-          <span className="dsh-log-msg">{error}</span>
-        </div>
-      )}
-
-      {/* ---- 02 · the scope. The header echoes the live query. ------------ */}
-      <div className="dsh-sechead dsh-sechead-gap">
-        <span className="dsh-secidx">02</span>
-        <span className="dsh-secrule" />
-        <span className="dsh-seccmd">
-          $ jobs <span className="dsh-flag">--min</span>{' '}
-          <span className="dsh-val">{minScore === 0 ? 'any' : minScore}</span>{' '}
-          <span className="dsh-flag">--src</span>{' '}
-          <span className="dsh-val">{srcLabel}</span>{' '}
-          <span className="dsh-flag">--status</span>{' '}
-          <span className="dsh-val">{statusFilter}</span>
+  const filters = (
+    <>
+      <div className="dsh-ctl">
+        <span className="dsh-ctl-k" id={`${uid}-score`}>
+          Minimum score
         </span>
+        <div className="dsh-scores" role="group" aria-labelledby={`${uid}-score`}>
+          {SCORE_OPTIONS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`dsh-score${s === minScore ? ' is-on' : ''}`}
+              aria-pressed={s === minScore}
+              onClick={() => setMinScore(s)}
+            >
+              {s === 0 ? 'Any' : <span className="dsh-num">{s}+</span>}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {(sourceCounts.length > 1 || (!loadingList && jobs.length > 0)) && (
-        <div className="dsh-scope">
-          {sourceCounts.length > 1 && (
-            <div className="dsh-row">
-              <span className="dsh-rowlabel">source</span>
-              <div className="dsh-seg" role="tablist" aria-label="Filter by source">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={sourceFilter === ''}
-                  className={`dsh-seg-btn${sourceFilter === '' ? ' is-on' : ''}`}
-                  onClick={() => setSourceFilter('')}
-                >
-                  <span className="dsh-seg-mark" aria-hidden="true" />
-                  all sources
-                </button>
-                {sourceCounts.map((s) => (
-                  <button
-                    key={s.name}
-                    type="button"
-                    role="tab"
-                    aria-selected={sourceFilter === s.name}
-                    className={`dsh-seg-btn${sourceFilter === s.name ? ' is-on' : ''}${
-                      s.name === CAREER_PAGES ? ' is-key' : ''
-                    }`}
-                    onClick={() => setSourceFilter(s.name)}
-                    title={
-                      s.name === CAREER_PAGES
-                        ? 'Roles read straight off company career pages'
-                        : undefined
-                    }
-                  >
-                    <span className="dsh-seg-mark" aria-hidden="true" />
-                    {s.name === CAREER_PAGES ? 'career pages' : s.name}
-                    <span className="dsh-seg-n">{s.count}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!loadingList && jobs.length > 0 && (
-            <>
-              <div className="dsh-row dsh-tele scanlines">
-                <div className="dsh-readouts">
-                  <div className="dsh-ro dsh-ro-lead">
-                    <span className="dsh-ro-v">{jobs.length}</span>
-                    <span className="dsh-ro-k">matches</span>
-                  </div>
-                  <div className="dsh-ro">
-                    <span className="dsh-ro-k">shown</span>
-                    <span className="dsh-ro-v">{visibleJobs.length}</span>
-                  </div>
-                  <div className="dsh-ro">
-                    <span className="dsh-ro-k">in play</span>
-                    <span className="dsh-ro-v">{inPlay}</span>
-                  </div>
-                  <div className="dsh-ro">
-                    <span className="dsh-ro-k">min</span>
-                    <span className="dsh-ro-v">{minScore === 0 ? '—' : minScore}</span>
-                  </div>
-                  <div className="dsh-ro">
-                    <span className="dsh-ro-k">src</span>
-                    <span className="dsh-ro-v dsh-ro-v-txt">{srcLabel}</span>
-                  </div>
-                </div>
-
-                {/* Proportion, not numbers — the tabs below carry the counts. */}
-                <div className="dsh-mix" aria-hidden="true">
-                  {JOB_STATUSES.map((s) =>
-                    counts[s] > 0 ? (
-                      <span
-                        key={s}
-                        className={`dsh-mix-seg dsh-c-${s}`}
-                        style={{ flexGrow: counts[s] }}
-                        title={`${STATUS_LABELS[s]} ${counts[s]}`}
-                      />
-                    ) : null,
-                  )}
-                </div>
-              </div>
-
-              <div className="dsh-row">
-                <span className="dsh-rowlabel">status</span>
-                <div className="dsh-tabs" role="tablist" aria-label="Filter by status">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={statusFilter === 'all'}
-                    className={`dsh-tab dsh-c-all${statusFilter === 'all' ? ' is-on' : ''}`}
-                    onClick={() => setStatusFilter('all')}
-                  >
-                    <span className="dsh-tab-k">All</span>
-                    <span className="dsh-tab-n">{jobs.length}</span>
-                  </button>
-                  {JOB_STATUSES.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      role="tab"
-                      aria-selected={statusFilter === s}
-                      className={`dsh-tab dsh-c-${s}${statusFilter === s ? ' is-on' : ''}`}
-                      onClick={() => setStatusFilter(s)}
-                    >
-                      <span className="dsh-tab-k">{STATUS_LABELS[s]}</span>
-                      <span className="dsh-tab-n">{counts[s]}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
+      <div className="dsh-ctl">
+        <span className="dsh-ctl-k" id={`${uid}-status`}>
+          Status
+        </span>
+        <div className="dsh-tabs" role="tablist" aria-labelledby={`${uid}-status`}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={statusFilter === 'all'}
+            aria-controls={listId}
+            className="dsh-tab dsh-c-all"
+            onClick={() => setStatusFilter('all')}
+          >
+            All
+            <span className="dsh-tab-n">{jobs.length}</span>
+          </button>
+          {statusChoices.map((s) => (
+            <button
+              key={s}
+              type="button"
+              role="tab"
+              aria-selected={statusFilter === s}
+              aria-controls={listId}
+              className={`dsh-tab dsh-c-${s}`}
+              onClick={() => setStatusFilter(s)}
+            >
+              {STATUS_LABELS[s]}
+              <span className="dsh-tab-n">{counts[s]}</span>
+            </button>
+          ))}
         </div>
-      )}
+      </div>
+    </>
+  )
 
-      {/* ---- the stream --------------------------------------------------- */}
-      {loadingList ? (
-        <div className="dsh-loading">
-          <span className="dsh-caret" aria-hidden="true" />
-          reading index…
-        </div>
-      ) : jobs.length === 0 ? (
-        <div className="dsh-empty corner-frame">
-          <span className="dsh-empty-tag">0 rows</span>
-          <h3 className="dsh-empty-title">No jobs yet</h3>
-          <p className="dsh-empty-body">
-            Head to <strong>Profile</strong>, paste your resume and preferences,
-            then come back and click <strong>Fetch &amp; score jobs</strong>.
-            {minScore > 0 && (
-              <>
-                {' '}
-                You can also lower the <strong>Min score</strong> filter to see
-                more matches.
-              </>
-            )}
+  // ---- empty states ----
+
+  const ghosts = (
+    <div className="dsh-ghosts" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </div>
+  )
+
+  function emptyPool(): ReactNode {
+    if (career && !scrapingOn) {
+      return (
+        <div className="dsh-empty">
+          <h3 className="dsh-empty-t">Career-page reading isn’t switched on</h3>
+          <p className="dsh-empty-b">
+            This dashboard reads roles directly off company career pages. That
+            needs a scraping provider — Firecrawl or Tavily — configured on the
+            server, along with the list of career-page URLs to watch.
           </p>
+          <p className="dsh-empty-b">
+            Until then the job boards dashboard is where your listings will show
+            up.
+          </p>
+          {ghosts}
         </div>
-      ) : visibleJobs.length === 0 ? (
-        <div className="dsh-empty corner-frame">
-          <span className="dsh-empty-tag">0 rows</span>
-          <h3 className="dsh-empty-title">
-            No {STATUS_LABELS[statusFilter as JobStatus]} jobs
+      )
+    }
+
+    if (minScore > 0 && poolForView > 0) {
+      return (
+        <div className="dsh-empty">
+          <h3 className="dsh-empty-t">
+            Nothing scores <span className="dsh-num">{minScore}</span> or higher
           </h3>
-          <p className="dsh-empty-body">
-            None of your current matches are in this status. Switch back to{' '}
-            <strong>All</strong> to see everything.
+          <p className="dsh-empty-b">
+            {career
+              ? 'There are career-page roles in the pool, but none of them clear your score floor right now. Career pages are a small, slow trickle — it is worth reading the ones that scored lower.'
+              : 'There are board listings in the pool, but none of them clear your score floor. Drop the bar and skim what is underneath, or run a fetch for something newer.'}
           </p>
+          <div className="dsh-empty-acts">
+            <button type="button" className="dsh-btn" onClick={() => setMinScore(0)}>
+              Show every score
+            </button>
+          </div>
         </div>
-      ) : (
-        <>
-          <div className="dsh-list">
-            {visibleJobs.map((job) => (
+      )
+    }
+
+    if (career) {
+      return (
+        <div className="dsh-empty">
+          <h3 className="dsh-empty-t">No career-page roles yet</h3>
+          <p className="dsh-empty-b">
+            Company career pages are re-read every few hours rather than on every
+            fetch, so this list fills slowly and stays short on purpose — that is
+            the point of it.
+          </p>
+          <p className="dsh-empty-b">
+            Run a fetch to check now. If your profile is still empty, set that
+            first: nothing can be scored without it.
+          </p>
+          {ghosts}
+        </div>
+      )
+    }
+
+    return (
+      <div className="dsh-empty">
+        <h3 className="dsh-empty-t">No board listings yet</h3>
+        <p className="dsh-empty-b">
+          Job boards are the aggregators — Adzuna, Jooble and the rest. A fetch
+          fills this up in about a minute, as long as your profile is set so
+          there is something to score against.
+        </p>
+        {minScore > 0 && (
+          <p className="dsh-empty-b">
+            You are also filtering to <span className="dsh-num">{minScore}</span>+
+            — lowering that will show more.
+          </p>
+        )}
+        {minScore > 0 && (
+          <div className="dsh-empty-acts">
+            <button type="button" className="dsh-btn" onClick={() => setMinScore(0)}>
+              Show every score
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function emptyStatus(): ReactNode {
+    const label =
+      statusFilter === 'all' ? '' : STATUS_LABELS[statusFilter].toLowerCase()
+    return (
+      <div className="dsh-empty">
+        <h3 className="dsh-empty-t">Nothing is marked {label}</h3>
+        <p className="dsh-empty-b">
+          {jobs.length === 1
+            ? 'Your one match is in a different status.'
+            : `None of your ${jobs.length} matches are in this status yet.`}{' '}
+          Statuses move as you work: mark a role Outreach when you message
+          someone, Applied when you send it.
+        </p>
+        <div className="dsh-empty-acts">
+          <button
+            type="button"
+            className="dsh-btn"
+            onClick={() => setStatusFilter('all')}
+          >
+            Show all {jobs.length}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ---- the list ----
+
+  let listRegion: ReactNode
+  if (loading) {
+    listRegion = <DashSkeleton rows={career ? 3 : 5} />
+  } else if (loadError) {
+    listRegion = (
+      <div className="dsh-errslot">
+        <DashError info={loadError} onRetry={() => void load(minScore)} />
+      </div>
+    )
+  } else if (jobs.length === 0) {
+    listRegion = emptyPool()
+  } else if (visibleJobs.length === 0) {
+    listRegion = emptyStatus()
+  } else {
+    listRegion = (
+      <ul className="dsh-list">
+        {visibleJobs.map((job, i) => {
+          const days = daysSince(job.postedAt ?? job.createdAt)
+          const host = hostOf(job.url)
+          return (
+            <li className="dsh-item" key={job.id}>
+              {career && (
+                <p className="dsh-item-cap">
+                  <span className="dsh-item-i">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  {host && <span className="dsh-item-host">{host}</span>}
+                  {days !== null && days <= 7 && (
+                    <span className="dsh-fresh">{freshLabel(days)}</span>
+                  )}
+                </p>
+              )}
               <JobCard
-                key={job.id}
                 job={job}
                 onUpdated={handleUpdated}
                 onDismissed={handleDismissed}
               />
-            ))}
+            </li>
+          )
+        })}
+      </ul>
+    )
+  }
+
+  const feedback = (
+    <>
+      {note && (
+        <div className="dsh-note u-rise" role="status">
+          <span className="dsh-note-tick" aria-hidden="true">
+            ✓
+          </span>
+          <div className="dsh-note-txt">
+            <p className="dsh-note-t">{note.title}</p>
+            <p className="dsh-note-l">{note.line}</p>
           </div>
-          <div className="dsh-eof">
-            <span>eof</span>
-            <span className="dsh-eof-rule" aria-hidden="true" />
-            <span>
-              {visibleJobs.length} {visibleJobs.length === 1 ? 'row' : 'rows'}
-            </span>
-          </div>
-        </>
+          <span className="dsh-note-meta">{note.meta}</span>
+          <button
+            type="button"
+            className="dsh-note-x"
+            onClick={() => setNote(null)}
+            aria-label="Dismiss this message"
+          >
+            ×
+          </button>
+        </div>
       )}
+      {actionError && (
+        <DashError
+          info={actionError.info}
+          onRetry={actionError.retry}
+          onDismiss={() => setActionError(null)}
+        />
+      )}
+    </>
+  )
+
+  const runPanel = (
+    <DashRunPanel
+      phase={phase}
+      layout={career ? 'rail' : 'bar'}
+      canRescore={jobs.length > 0 || poolForView > 0}
+      onFetch={() => void handleFetch()}
+      onRescore={() => void handleRescore()}
+    />
+  )
+
+  // ---------------------------------------------------------------- career
+  if (career) {
+    return (
+      <div className="dsh dsh-career">
+        <header className="dsh-head">
+          <div className="dsh-head-txt">
+            <p className="dsh-eyebrow">
+              <span className="dsh-dot" aria-hidden="true" />
+              Career pages
+            </p>
+            <h2 className="dsh-h1">Read straight off company sites</h2>
+            <p className="dsh-lede">
+              These roles came from a company’s own careers page rather than an
+              aggregator — usually days earlier, and in front of far fewer people.
+              There are only ever a handful, so read them properly instead of
+              skimming.
+            </p>
+          </div>
+        </header>
+
+        <div className="dsh-body">
+          <aside className="dsh-rail">
+            <div className="dsh-card">
+              {runPanel}
+              <p className="dsh-fine">
+                A fetch reads every source. Career pages are only re-read every
+                few hours, so this list will not always change.
+              </p>
+            </div>
+
+            <div className="dsh-card dsh-filters">{filters}</div>
+          </aside>
+
+          <main className="dsh-main" id={listId}>
+            {feedback}
+            {!loading && jobs.length > 0 && (
+              <p className="dsh-count">
+                <span className="dsh-num">{jobs.length}</span>{' '}
+                {jobs.length === 1 ? 'role' : 'roles'} above{' '}
+                {minScore === 0 ? 'any score' : <span className="dsh-num">{minScore}</span>}
+                {freshCount > 0 && (
+                  <>
+                    {' · '}
+                    <span className="dsh-num">{freshCount}</span> posted this week
+                  </>
+                )}
+                {statusFilter !== 'all' && (
+                  <>
+                    {' · showing '}
+                    <span className="dsh-num">{visibleJobs.length}</span>{' '}
+                    {STATUS_LABELS[statusFilter].toLowerCase()}
+                  </>
+                )}
+              </p>
+            )}
+            {listRegion}
+          </main>
+
+          {/* Last in the DOM so a phone reads controls, then roles, then this. */}
+          <aside className="dsh-aside">
+            <div className="dsh-card">
+              <h3 className="dsh-card-t">Why these are worth the time</h3>
+              <dl className="dsh-why-list">
+                <div>
+                  <dt>Barely contested</dt>
+                  <dd>
+                    Many never reach an aggregator at all. The ones that do land
+                    there days later, behind hundreds of applications.
+                  </dd>
+                </div>
+                <div>
+                  <dt>As current as it gets</dt>
+                  <dd>
+                    Read off the company’s own page, so nothing here is a stale
+                    relist from a third party.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Few enough to read</dt>
+                  <dd>
+                    A handful, not hundreds. Open each one, read the verdict, and
+                    write a note you would actually send.
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </aside>
+        </div>
+      </div>
+    )
+  }
+
+  // ------------------------------------------------------------ job boards
+  return (
+    <div className="dsh dsh-boards">
+      <header className="dsh-head">
+        <div className="dsh-head-txt">
+          <p className="dsh-eyebrow">Job boards</p>
+          <h2 className="dsh-h1">Everything the aggregators are carrying</h2>
+          <p className="dsh-lede">
+            Adzuna, Jooble and the rest — the same listings everyone else is
+            looking at. Volume is the point: set a score floor, work down from the
+            top, and move on quickly.
+          </p>
+        </div>
+
+        <div className="dsh-readout">
+          <div className="dsh-stats">
+            <div className="dsh-stat is-lead">
+              <span className={`dsh-stat-v${loading ? ' is-wait' : ''}`}>
+                {loading ? '—' : jobs.length}
+              </span>
+              <span className="dsh-stat-k">
+                {minScore === 0 ? 'matches' : `matches at ${minScore}+`}
+              </span>
+            </div>
+            <div className="dsh-stat">
+              <span className={`dsh-stat-v${loading ? ' is-wait' : ''}`}>
+                {loading ? '—' : visibleJobs.length}
+              </span>
+              <span className="dsh-stat-k">showing</span>
+            </div>
+            <div className="dsh-stat">
+              <span className={`dsh-stat-v${loading ? ' is-wait' : ''}`}>
+                {loading ? '—' : inPlay}
+              </span>
+              <span className="dsh-stat-k">in play</span>
+            </div>
+          </div>
+          {jobs.length > 0 && (
+            <div
+              className="dsh-mix"
+              aria-hidden="true"
+              title="Status mix across your matches"
+            >
+              {JOB_STATUSES.map((s) =>
+                counts[s] > 0 ? (
+                  <span
+                    key={s}
+                    className={`dsh-mix-seg dsh-c-${s}`}
+                    style={{ flexGrow: counts[s] }}
+                  />
+                ) : null,
+              )}
+            </div>
+          )}
+        </div>
+      </header>
+
+      <section className="dsh-console" aria-label="Controls and filters">
+        <div className="dsh-console-row is-top">
+          {runPanel}
+          {boardSources.length > 0 && (
+            <p className="dsh-legend">
+              <span className="dsh-legend-k">In the pool</span>
+              {boardSources.map((s) => (
+                <span className="dsh-legend-i" key={s.name}>
+                  {s.name}
+                  <span className="dsh-legend-n">{s.count}</span>
+                </span>
+              ))}
+            </p>
+          )}
+        </div>
+
+        <div className="dsh-console-row is-filters">{filters}</div>
+      </section>
+
+      {feedback}
+
+      <div className="dsh-body">
+        <main className="dsh-main" id={listId}>
+          {listRegion}
+        </main>
+      </div>
     </div>
   )
 }

@@ -2,25 +2,28 @@
    Job Copilot — job card + outreach draft
    Every value here resolves to a token from styles/system.css.
 
-   THE COMPOSITION ARGUMENT
-   The old card was one rounded box with five evenly-padded rows stacked inside
-   it, so the score, the notes textarea and the dismiss button all shouted at
-   the same volume. This rebuilds it as a *window*: a dark chrome strip on top,
-   a lit body, then hairline-separated control bands and a dark action footer.
-   Bands run edge to edge — the eye gets horizontal rules to travel along
-   instead of a column of identical pills.
+   WHAT THIS CARD IS
+   A listing you are making a decision about. Not an instrument panel. The
+   previous version dressed it as one — mono body copy, uppercase letterspaced
+   buttons, square corners, a segment meter, `$ command` headings — and the
+   result read as machinery rather than as a job.
 
-   THE READING ORDER IT ENFORCES
-     1. identity  — display-font title + company, the only non-mono type here
-     2. verdict   — the score gutter (big tabular numeral + 10-segment meter)
-                    with a vertical hairline dividing it from the title, and
-                    the reason hanging off a left rule tinted the score's hue
-     3. action    — status segmented control, notes, then the footer buttons
+   THE READING ORDER
+     1. WHAT IT IS    — title (sans, the largest thing here), company, then the
+                        few facts you actually decide on: place, pay, CV variant.
+                        Provenance drops to fine print underneath.
+     2. HOW IT FITS   — one quiet inset panel: the score as a large tabular
+                        numeral against /100, a soft bar, and the reason as
+                        ordinary prose at 1.6.
+     3. WHAT TO DO    — status, notes, then the actions, with the outreach
+                        draft opening as a deeper surface at the foot.
 
-   Square corners throughout. The reference terminal has no rounded cards; the
-   only radius in here is the shared `.u-pill`. Colour discipline: one accent,
-   `.st-*` hues for pipeline state only, `--sc` for the score verdict (which is
-   accent / amber / muted — no new hues invented).
+   TYPE. Sans (Geist) for everything a person reads as language. Mono only for
+   data: the score, character counts, dates. Sentence case throughout — no
+   letterspaced caps on anything that carries meaning.
+
+   COLOUR. One accent, spent on the single call to action and on a high score.
+   `.st-*` hues carry pipeline state; `--sc` carries the score verdict.
    ============================================================================= */
 
 /* -----------------------------------------------------------------------------
@@ -30,312 +33,269 @@
 .jc {
   position: relative;
   display: block;
+  padding: 1.15rem 1.25rem 1.05rem;
   background: var(--panel);
   border: 1px solid var(--line);
-  /* The status rail. Replaces the old coloured 3px bar with a 2px hairline
-     that reads as an instrument edge rather than a category tag. */
-  border-left: 2px solid var(--st, var(--grey));
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   color: var(--text);
-  font-family: var(--font-mono);
-  transition: border-color var(--base) var(--ease);
+  font-family: var(--font-sans);
+  transition:
+    border-color var(--base) var(--ease),
+    box-shadow var(--base) var(--ease);
 }
 
 .jc:hover,
 .jc:focus-within {
   border-color: var(--line-strong);
-  border-left-color: var(--st, var(--grey));
+  box-shadow: var(--shadow-lift);
 }
 
-/* Score verdict hue. Drives the numeral, the meter and the reason rule so the
-   three read as one instrument. */
+/* Score verdict hue: drives the numeral and the bar so they read as one
+   answer to one question. No new colours are invented for it. */
 .jc-s-hi   { --sc: var(--accent); }
 .jc-s-mid  { --sc: var(--amber); }
 .jc-s-lo   { --sc: var(--muted); }
 .jc-s-none { --sc: var(--faint); }
 
 /* -----------------------------------------------------------------------------
-   Chrome strip — provenance on the left, pipeline state on the right
+   1 — What the job is
    -------------------------------------------------------------------------- */
 
-.jc-top {
+.jc-head {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  padding: 0.45rem 0.75rem 0.45rem 0.9rem;
-  background: var(--panel-2);
-  border-bottom: 1px solid var(--line-soft);
+  align-items: flex-start;
+  gap: 0.75rem 1rem;
 }
 
-.jc-src {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  overflow-wrap: anywhere;
-}
-
-.jc-sep {
-  font-size: 10px;
-  line-height: 1;
-  color: var(--line-strong);
-}
-
-.jc-when {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.jc-state {
-  margin-left: auto;
-}
-
-/* -----------------------------------------------------------------------------
-   Body — score gutter | identity
-   -------------------------------------------------------------------------- */
-
-.jc-body {
-  padding: 0.9rem 0.9rem 1rem 1rem;
-}
-
-.jc-ident {
-  display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: 0 0.95rem;
-  align-items: start;
-}
-
-.jc-score {
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
+.jc-headline {
   min-width: 0;
-  padding-right: 0.9rem;
-  border-right: 1px solid var(--line);
-}
-
-.jc-score-cap {
-  color: var(--faint);
-}
-
-.jc-score-val {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 1.95rem;
-  font-weight: 700;
-  line-height: 0.86;
-  letter-spacing: -0.055em;
-  color: var(--sc);
-}
-
-/* Ten segments, one per ten points. A meter reads as measurement; the old
-   coloured circle read as a badge. */
-.jc-meter {
-  display: flex;
-  gap: 2px;
-  padding-top: 0.1rem;
-}
-
-.jc-tick {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 6px;
-  background: var(--line);
-}
-
-.jc-tick-on {
-  background: var(--sc);
-}
-
-.jc-id {
-  min-width: 0;
-  padding-top: 1px;
+  flex: 1 1 auto;
 }
 
 .jc-title {
-  margin: 0 0 0.3rem;
-  font-family: var(--font-display);
-  font-size: 1.05rem;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
   font-weight: 600;
-  line-height: 1.24;
-  letter-spacing: -0.018em;
+  line-height: 1.35;
+  letter-spacing: -0.012em;
   color: var(--text);
   overflow-wrap: anywhere;
 }
 
 .jc-org {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.45;
-  letter-spacing: 0.01em;
+  margin: 0.2rem 0 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.5;
   color: var(--text-dim);
   overflow-wrap: anywhere;
 }
 
-/* Spec row — labelled micro-fields instead of a bag of dot-separated text. */
-.jc-spec {
+/* The two or three facts you actually weigh, as soft chips rather than a
+   labelled micro-table. */
+.jc-facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.55rem 1.4rem;
-  margin: 0.75rem 0 0;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
 }
 
-.jc-spec-cell {
-  min-width: 0;
-}
-
-.jc-spec dt {
-  margin: 0 0 0.28rem;
-  color: var(--faint);
-}
-
-.jc-spec dd {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.4;
+.jc-fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.22rem 0.55rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  font-size: 12.5px;
+  line-height: 1.45;
   color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
-/* The reason for the score, hung off a rule in the score's own hue. */
-.jc-verdict {
-  margin-top: 0.9rem;
-  padding-left: 0.75rem;
-  border-left: 2px solid color-mix(in srgb, var(--sc) 45%, transparent);
+.jc-fact-key {
+  font-size: 11px;
+  color: var(--muted);
 }
 
-.jc-verdict-cap {
-  display: block;
-  margin-bottom: 0.35rem;
-  color: var(--faint);
+.jc-fact-pay {
+  color: var(--text);
+  font-weight: 500;
 }
 
-.jc-verdict-txt {
-  margin: 0;
-  font-family: var(--font-mono);
+.jc-prov {
+  margin: 0.6rem 0 0;
   font-size: 12px;
-  line-height: 1.7;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.jc-state {
+  flex: none;
+}
+
+/* -----------------------------------------------------------------------------
+   2 — How well it fits, and why
+   -------------------------------------------------------------------------- */
+
+.jc-fit {
+  margin-top: 0.95rem;
+  padding: 0.8rem 0.95rem 0.9rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.jc-fit-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.jc-fit-cap {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* No score yet: say so in words. An empty gauge and a dash is a machine
+   shrugging at you. */
+.jc-fit-none {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.jc-fit-read {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.jc-fit-val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  color: var(--sc);
+}
+
+.jc-fit-max {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+/* One continuous bar. The old ten-segment meter read as a gauge on a rack. */
+.jc-bar {
+  display: block;
+  height: 5px;
+  margin-top: 0.6rem;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.jc-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sc);
+  transition: width var(--base) var(--ease);
+}
+
+.jc-why {
+  margin: 0.75rem 0 0;
+  max-width: 78ch;
+  font-size: 13.5px;
+  line-height: 1.6;
   color: var(--text-dim);
   overflow-wrap: anywhere;
 }
 
 /* -----------------------------------------------------------------------------
-   Bands
+   3 — What you can do about it
    -------------------------------------------------------------------------- */
 
-.jc-band {
+.jc-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem 0.8rem;
-  padding: 0.6rem 0.9rem 0.6rem 1rem;
-  border-top: 1px solid var(--line-soft);
+  gap: 0.5rem 0.9rem;
+  margin-top: 1rem;
 }
 
-.jc-band-cap {
+.jc-row-cap {
   flex: none;
-  color: var(--faint);
 }
 
-/* Segmented status control — one strip with collapsed hairlines, not five
-   free-floating buttons. */
 .jc-seg {
   display: flex;
   flex-wrap: wrap;
-  padding-bottom: 1px;
+  gap: 0.3rem;
 }
 
 .jc-seg-btn {
   appearance: none;
   cursor: pointer;
-  margin: 0 0 -1px 0;
-  padding: 0.38rem 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  color: var(--faint);
-  font-family: var(--font-mono);
-  font-size: 10px;
+  padding: 0.34rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
   font-weight: 500;
-  line-height: 1.2;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  line-height: 1.3;
   transition:
     color var(--fast) var(--ease),
     background var(--fast) var(--ease),
     border-color var(--fast) var(--ease);
 }
 
-.jc-seg-btn + .jc-seg-btn {
-  margin-left: -1px;
-}
-
 .jc-seg-btn:not(:disabled):hover {
-  position: relative;
-  z-index: 1;
-  color: var(--text-dim);
-  border-color: var(--line-strong);
+  color: var(--text);
+  background: var(--panel-hover);
 }
 
 .jc-seg-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.5;
   cursor: default;
 }
 
-/* Segments are flush, so the shared focus ring (offset 2px) has to be lifted
-   above its neighbours or the active segment's fill clips it. */
-.jc-seg-btn:focus-visible {
-  position: relative;
-  z-index: 3;
-}
-
 .jc-seg-btn[aria-pressed='true'] {
-  position: relative;
-  z-index: 2;
   color: var(--st);
   background: var(--st-bg);
-  border-color: color-mix(in srgb, var(--st) 40%, transparent);
-  box-shadow: inset 0 2px 0 0 var(--st);
+  border-color: color-mix(in srgb, var(--st) 26%, transparent);
 }
 
 /* Notes */
 .jc-notes {
-  display: block;
-  padding: 0.7rem 0.9rem 0.85rem 1rem;
-  border-top: 1px solid var(--line-soft);
+  margin-top: 0.95rem;
 }
 
 .jc-notes-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.5rem;
-  margin-bottom: 0.45rem;
-}
-
-.jc-notes-cap {
-  color: var(--faint);
+  margin-bottom: 0.4rem;
 }
 
 .jc-notes-state {
   margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -347,34 +307,37 @@
 .jc-input {
   display: block;
   width: 100%;
-  min-height: 2.7rem;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid var(--line-soft);
-  border-radius: 0;
-  background: var(--panel-2);
+  min-height: 3rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev);
   color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.65;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  line-height: 1.6;
   resize: vertical;
   caret-color: var(--accent);
-  transition: border-color var(--fast) var(--ease);
+  transition:
+    border-color var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
 }
 
 .jc-input::placeholder {
-  color: var(--faint);
+  color: var(--muted);
 }
 
-.jc-input:hover {
-  border-color: var(--line);
+.jc-input:hover:not(:focus) {
+  border-color: var(--line-strong);
 }
 
 .jc-input:focus {
-  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
 }
 
 /* -----------------------------------------------------------------------------
-   Action footer
+   Actions
    -------------------------------------------------------------------------- */
 
 .jc-acts {
@@ -382,8 +345,8 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 0.45rem;
-  padding: 0.65rem 0.9rem 0.65rem 1rem;
-  background: var(--panel-2);
+  margin-top: 1.05rem;
+  padding-top: 0.95rem;
   border-top: 1px solid var(--line-soft);
 }
 
@@ -394,17 +357,15 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.44rem 0.7rem;
+  padding: 0.5rem 0.8rem;
   border: 1px solid var(--line);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   font-weight: 500;
-  line-height: 1.1;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  line-height: 1.2;
   white-space: nowrap;
   transition:
     color var(--fast) var(--ease),
@@ -415,19 +376,20 @@
 .jc-btn:not(:disabled):hover {
   color: var(--text);
   border-color: var(--line-strong);
+  background: var(--panel-hover);
 }
 
 .jc-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.5;
   cursor: default;
 }
 
-/* The card's one call to action. Tinted, not filled — a filled neon slab would
-   out-shout the score, which is the number that actually matters. */
+/* The card's one call to action. Tinted rather than a filled slab, so it does
+   not out-shout the score. */
 .jc-btn-go {
   color: var(--accent);
   background: var(--accent-dim);
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .jc-btn-go:not(:disabled):hover {
@@ -439,13 +401,13 @@
 .jc-btn-quiet {
   margin-left: auto;
   border-color: transparent;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .jc-btn-quiet:not(:disabled):hover {
   color: var(--red);
   background: var(--red-bg);
-  border-color: color-mix(in srgb, var(--red) 38%, transparent);
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
 }
 
 /* -----------------------------------------------------------------------------
@@ -453,107 +415,88 @@
    -------------------------------------------------------------------------- */
 
 .jc-err-slot {
-  padding: 0 0.9rem 0.8rem 1rem;
+  margin-top: 0.8rem;
 }
 
 .jc-err {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  display: block;
   margin: 0;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--red) 32%, transparent);
-  border-left-width: 2px;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--red) 26%, transparent);
+  border-radius: var(--radius-sm);
   background: var(--red-bg);
-  color: var(--red);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.55;
+  /* A hair brighter than the raw hue: red text on a red tint is the one place
+     the status palette drops under 4.5:1. */
+  color: color-mix(in srgb, var(--red) 86%, #ffffff);
+  font-size: 13px;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
-.jc-err-tag {
-  flex: none;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  opacity: 0.75;
-}
-
 /* -----------------------------------------------------------------------------
-   Outreach — the generated artefact
-   Darkest surface in the card, corner-ticked, section-headed with the shared
-   `$ command` idiom. Each draft is its own bordered document with a head strip
-   carrying an index, a character count and an unmissable COPY control.
+   Outreach — the generated draft
+   A deeper surface at the foot of the card, running edge to edge so it reads
+   as a drawer that opened rather than one more row.
    -------------------------------------------------------------------------- */
 
-/* Deepest surface in the card, so the drafts sitting on it read as documents
-   laid on a desk rather than more rows of the same card. */
 .jc-out {
-  position: relative;
-  padding: 0.9rem 0.9rem 1rem 1rem;
-  background: var(--bg);
+  margin: 1.05rem -1.25rem -1.05rem;
+  padding: 1rem 1.25rem 1.15rem;
+  background: var(--bg-elev);
   border-top: 1px solid var(--line);
-}
-
-/* Pull the shared corner ticks flush with this panel rather than 1px outside. */
-.jc-out.corner-frame::before {
-  top: 0;
-  left: 0;
-}
-
-.jc-out.corner-frame::after {
-  bottom: 0;
-  right: 0;
+  border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
 }
 
 .jc-out-head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem 0.6rem;
-  margin-bottom: 0.85rem;
+  gap: 0.5rem 0.7rem;
+  margin-bottom: 0.8rem;
+}
+
+.jc-out-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+  color: var(--text);
 }
 
 .jc-out-right {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem 0.6rem;
+  gap: 0.5rem 0.7rem;
   margin-left: auto;
 }
 
 .jc-out-time {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
   white-space: nowrap;
 }
 
 .jc-chip {
   display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.24rem 0.45rem;
-  border: 1px solid var(--line);
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
   background: var(--panel);
   color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  line-height: 1;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
-.jc-chip b {
-  font-weight: 400;
-  color: var(--faint);
+.jc-chip-key {
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .jc-loading {
@@ -561,22 +504,22 @@
   align-items: center;
   gap: 0.55rem;
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font-size: 13px;
+  line-height: 1.6;
   color: var(--muted);
 }
 
 .jc-draft {
   margin-bottom: 0.6rem;
   border: 1px solid var(--line-soft);
-  background: var(--panel-2);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
   transition: border-color var(--fast) var(--ease);
 }
 
 .jc-draft:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .jc-draft:last-child {
@@ -586,40 +529,27 @@
 .jc-draft-head {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.45rem 0.4rem 0.6rem;
-  background: var(--panel);
+  flex-wrap: wrap;
+  gap: 0.4rem 0.6rem;
+  padding: 0.5rem 0.55rem 0.5rem 0.8rem;
   border-bottom: 1px solid var(--line-soft);
 }
 
-.jc-draft-idx {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  line-height: 1;
-  letter-spacing: 0.16em;
-  color: var(--line-strong);
-}
-
 .jc-draft-cap {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text);
   overflow-wrap: anywhere;
 }
 
 .jc-draft-count {
   margin-left: auto;
   flex: none;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  line-height: 1;
-  letter-spacing: 0.1em;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
   white-space: nowrap;
 }
 
@@ -627,16 +557,21 @@
   display: block;
   width: 100%;
   min-height: 8.5rem;
-  padding: 0.7rem 0.75rem;
+  padding: 0.8rem;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  line-height: 1.75;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  line-height: 1.7;
   resize: vertical;
   caret-color: var(--accent);
+}
+
+.jc-draft-body:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -3px;
 }
 
 .jc-copy {
@@ -646,18 +581,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 5.1rem;
-  padding: 0.33rem 0.5rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-  border-radius: 0;
+  min-width: 4.4rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--accent);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
   font-weight: 500;
-  line-height: 1;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  line-height: 1.2;
   white-space: nowrap;
   transition:
     color var(--fast) var(--ease),
@@ -667,21 +600,17 @@
 
 .jc-copy:hover {
   background: var(--accent-dim);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-.jc-copy-on {
+.jc-copy-on,
+.jc-copy-on:hover {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
 }
 
-.jc-copy-on:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-/* Contact targets — a ruled table, not a list of cards. */
+/* Contact suggestions — quiet rows, one per person. */
 .jc-tg {
   list-style: none;
   margin: 0;
@@ -691,8 +620,9 @@
 .jc-tg-row {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.42rem 0.5rem 0.42rem 0.6rem;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  padding: 0.55rem 0.8rem;
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -700,19 +630,10 @@
   border-bottom: 0;
 }
 
-.jc-tg-i {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.16em;
-  color: var(--line-strong);
-}
-
 .jc-tg-t {
   min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--text-dim);
   overflow-wrap: anywhere;
 }
@@ -720,74 +641,58 @@
 .jc-tg-go {
   flex: none;
   margin-left: auto;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 0;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   text-decoration: none;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  line-height: 1;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
   white-space: nowrap;
   transition:
     color var(--fast) var(--ease),
+    background var(--fast) var(--ease),
     border-color var(--fast) var(--ease);
 }
 
 .jc-tg-go:hover {
   color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-dim);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 
 /* -----------------------------------------------------------------------------
    Narrow — holds together down to 360px
    -------------------------------------------------------------------------- */
 
-@media (max-width: 520px) {
-  .jc-ident {
-    grid-template-columns: 66px minmax(0, 1fr);
-    gap: 0 0.7rem;
+@media (max-width: 560px) {
+  .jc {
+    padding: 1rem 0.95rem 0.95rem;
   }
 
-  .jc-score {
-    padding-right: 0.6rem;
-  }
-
-  .jc-score-val {
-    font-size: 1.55rem;
-  }
-
-  .jc-body {
-    padding: 0.8rem 0.7rem 0.85rem 0.8rem;
-  }
-
-  .jc-top,
-  .jc-band,
-  .jc-notes,
-  .jc-acts,
-  .jc-out {
-    padding-left: 0.8rem;
-    padding-right: 0.7rem;
-  }
-
-  .jc-err-slot {
-    padding-left: 0.8rem;
-    padding-right: 0.7rem;
+  .jc-head {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    gap: 0.55rem;
   }
 
   .jc-title {
     font-size: 1rem;
   }
 
-  .jc-spec {
-    gap: 0.5rem 1rem;
+  .jc-fit-val {
+    font-size: 1.45rem;
   }
 
   .jc-btn-quiet {
     margin-left: 0;
+  }
+
+  .jc-out {
+    margin: 1rem -0.95rem -0.95rem;
+    padding: 0.95rem 0.95rem 1.05rem;
   }
 
   .jc-out-right {

@@ -5,9 +5,9 @@ import '../styles/profile.css'
 
 const PROVIDERS = ['groq', 'gemini', 'anthropic'] as const
 
-// Bring-your-own-key. The key is validated by the server against Gemini before
-// it is stored, encrypted at rest, and never sent back to the browser — we only
-// ever display the mask the server returns.
+// Bring-your-own-key. The key is validated by the server against the provider
+// before it is stored, encrypted at rest, and never sent back to the browser —
+// we only ever display the mask the server returns.
 export default function KeySettings({
   onUnauthorized,
   onChanged,
@@ -73,11 +73,6 @@ export default function KeySettings({
 
   return (
     <section className="pf-sec">
-      <div className="sec">
-        <span className="sec-index">03</span>
-        <span className="sec-rule" />
-        <span className="sec-cmd">$ auth --byok</span>
-      </div>
       <h2 className="sec-title">Scoring key</h2>
       <p className="sec-sub">
         Job Copilot scores every role against your résumé with an LLM, and it runs on{' '}
@@ -97,8 +92,7 @@ export default function KeySettings({
 
       {error && (
         <div className="pf-alert" role="alert">
-          <span className="pf-alert-tag">err</span>
-          <span>{error}</span>
+          {error}
         </div>
       )}
 
@@ -106,20 +100,20 @@ export default function KeySettings({
         {/* Status line: provider + the server-side mask. The raw key never
             comes back from the server, so there is nothing else to show. */}
         <div className="pf-kp-head">
-          <span className="pf-kp-headkey">status</span>
+          <span className="pf-kp-headkey">Status</span>
           {hasKey ? (
             <>
               <span className="u-pill pf-st-on">{status?.provider ?? 'key'}</span>
               <code className="pf-mask">{status?.mask}</code>
-              {saved && <span className="pf-saved">Updated ✓</span>}
+              {saved && <span className="pf-saved">Updated</span>}
             </>
           ) : (
             <>
-              <span className="u-pill pf-st-off">no key · keyword scoring</span>
+              <span className="u-pill pf-st-off">No key — keyword scoring</span>
               {/* Which providers the server can recognise — only worth showing
                   while there is nothing to detect yet. */}
               <span className="pf-providers">
-                <span className="pf-prov-lead">accepts</span>
+                <span className="pf-prov-lead">Accepts</span>
                 {PROVIDERS.map((p) => (
                   <span key={p} className="pf-prov">
                     {p}
@@ -132,20 +126,20 @@ export default function KeySettings({
 
         {/* The trust story, as structure rather than reassurance. */}
         <div className="pf-led">
-          <span className="pf-led-term">validated</span>
+          <span className="pf-led-term">Validated</span>
           <span>
             Checked against the provider before it is accepted, so a typo fails here and
             not halfway through a scoring run.
           </span>
         </div>
         <div className="pf-led">
-          <span className="pf-led-term">encrypted</span>
+          <span className="pf-led-term">Encrypted</span>
           <span>Encrypted before it touches the database. Nothing is written in plain text.</span>
         </div>
         <div className="pf-led pf-led-keep">
-          <span className="pf-led-term">write-only</span>
+          <span className="pf-led-term">Never shown again</span>
           <span>
-            Never returned to this browser again — the {status?.mask ? 'mask above' : 'mask'} is
+            It is never returned to this browser — the {status?.mask ? 'mask above' : 'mask'} is
             all the server will hand back.
           </span>
         </div>
@@ -157,8 +151,8 @@ export default function KeySettings({
         </p>
 
         <div className="pf-keyform">
-          <label className="pf-key" htmlFor="pf-apikey">
-            api key
+          <label className="pf-key pf-keylabel" htmlFor="pf-apikey">
+            API key
           </label>
           <input
             id="pf-apikey"

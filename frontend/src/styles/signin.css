@@ -1,0 +1,891 @@
+/* =============================================================================
+   Job Copilot — signed-out landing page
+
+   WHAT THIS PAGE HAS TO DO
+   Someone anxious and mid-job-search lands here cold. In about three seconds
+   they need to know what this is, see that it actually works, understand what
+   happens if they sign in, and find the button. Everything here serves that
+   order: statement → proof → plan → button → the honest note about their data.
+
+   WHY IT LOOKS LIKE THIS
+   The previous version dressed the page as a terminal ($ commands, `↳` glyphs,
+   letterspaced caps, neon) and left the bottom 40% of a 1080p screen empty.
+   Both are fixed here, per styles/system.css v2:
+
+   - Prose is Geist. Mono appears only on data: the score, salary, posted date,
+     the CV label, the source name. Nothing that is language is monospaced.
+   - Sentence case throughout. No letterspaced caps, no command-line cosplay.
+   - The page is a full-height column: rail / hero / plan strip / footer. The
+     hero grows to absorb tall viewports, so content is never stranded at the
+     top of a big screen and never stretched thin on a small one.
+   - One accent (mint), used for the score, the primary button and the live
+     dot — that is, for "this is good" and "this is the action". Nothing else.
+   - Atmosphere comes from two very soft radial washes, not from texture.
+
+   SCOPED TOKENS
+   The page pins its own palette on `.lp`. system.css v2 is the contract, but
+   the older index.css still re-declares :root afterwards with the previous
+   neon-green values. That cascade bug is now fixed (system.css loads last), so
+   these alias the global tokens rather than hard-coding the palette. The old
+   note is kept for context: reading --accent used to resurrect the look
+   this rebuild removes. These values mirror system.css v2 deliberately.
+   ============================================================================= */
+
+.lp {
+  --lp-bg: #0c0c0e;
+  --lp-panel: #17171a;
+  --lp-panel-2: #131316;
+  --lp-raise: rgba(255, 255, 255, 0.018);
+
+  --lp-line: rgba(255, 255, 255, 0.08);
+  --lp-line-soft: rgba(255, 255, 255, 0.05);
+
+  --lp-text: #f2f2f4;
+  --lp-dim: #c3c3c9;
+  --lp-muted: #9b9ba3;
+  --lp-faint: #6e6e77;
+
+  --lp-accent: var(--accent);
+  --lp-accent-soft: var(--accent-dim);
+  --lp-accent-line: var(--accent-ring);
+  --lp-on-accent: var(--on-accent);
+  --lp-amber: #e0b355;
+
+  --lp-gutter: clamp(1.15rem, 3.2vw, 2.75rem);
+  --lp-max: 76rem;
+  --lp-radius: 14px;
+  --lp-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans);
+  color: var(--lp-text);
+  background: var(--lp-bg);
+  line-height: 1.6;
+}
+
+/* Depth without texture: one mint wash behind the proof card, one neutral
+   wash under the opposite corner so the page is not a flat rectangle. */
+.lp::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(58rem 34rem at 76% 12%, rgba(61, 220, 151, 0.055), transparent 62%),
+    radial-gradient(46rem 30rem at 4% 96%, rgba(255, 255, 255, 0.028), transparent 66%);
+}
+
+/* index.css puts default margins on p/h1/h2; clear them without winning the
+   specificity fight against the class rules below — :where() scores zero, so a
+   plain `.lp-lede { margin-top }` still applies. `.lp p` did not, which quietly
+   flattened the whole page's vertical rhythm. */
+.lp :where(p, h1, h2, ol) {
+  margin: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Top rail
+   -------------------------------------------------------------------------- */
+
+.lp-top {
+  flex: none;
+  border-bottom: 1px solid var(--lp-line-soft);
+  background: rgba(12, 12, 14, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.lp-top-inner {
+  max-width: var(--lp-max);
+  margin: 0 auto;
+  padding: 0.85rem var(--lp-gutter);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.lp-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.lp-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--lp-accent-soft);
+  border: 1px solid var(--lp-accent-line);
+  color: var(--lp-accent);
+}
+
+.lp-mark svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+.lp-wordmark {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--lp-text);
+  white-space: nowrap;
+}
+
+.lp-top-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.lp-top-link {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--lp-dim);
+  background: transparent;
+  border: 1px solid var(--lp-line);
+  border-radius: 9px;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+  transition: color 0.16s var(--lp-ease), border-color 0.16s var(--lp-ease),
+    background 0.16s var(--lp-ease);
+}
+
+.lp-top-link:hover {
+  color: var(--lp-text);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lp-top-off {
+  font-size: 13px;
+  color: var(--lp-amber);
+}
+
+/* -----------------------------------------------------------------------------
+   Hero — grows to fill whatever height is left
+   -------------------------------------------------------------------------- */
+
+.lp-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.lp-hero {
+  flex: 1;
+  width: 100%;
+  max-width: var(--lp-max);
+  margin: 0 auto;
+  padding: clamp(1.5rem, 4vh, 3.25rem) var(--lp-gutter);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  grid-template-areas:
+    'intro proof'
+    'plan  proof';
+  grid-template-rows: auto auto;
+  align-content: center;
+  column-gap: clamp(2rem, 4.5vw, 4rem);
+  row-gap: clamp(1.25rem, 3vh, 2.25rem);
+}
+
+/* No demo available: one centred column rather than a hole where the card was. */
+.lp-hero.is-solo {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'intro' 'plan';
+  max-width: 48rem;
+}
+
+.lp-intro {
+  grid-area: intro;
+  align-self: end;
+}
+
+.lp-plan {
+  grid-area: plan;
+  align-self: start;
+}
+
+.lp-proof {
+  grid-area: proof;
+  align-self: center;
+  min-width: 0;
+}
+
+/* ---- the statement ---- */
+
+.lp-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lp-muted);
+  margin-bottom: clamp(0.75rem, 1.6vh, 1.15rem);
+}
+
+.lp-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--lp-accent);
+  animation: lp-breathe 2.8s var(--lp-ease) infinite;
+}
+
+/* Scales with the smaller of width and height, so a 1280×800 laptop gets a
+   headline that still leaves room for everything under it. */
+.lp-title {
+  margin: 0;
+  font-size: clamp(2rem, min(3.4vw, 5.6vh), 3.05rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: #85858f;
+  text-wrap: balance;
+}
+
+/* Emphasis by value inside one hue, rather than a neon fragment. */
+.lp-title em {
+  font-style: normal;
+  color: var(--lp-text);
+}
+
+.lp-lede {
+  margin-top: clamp(1.4rem, 3.2vh, 1.9rem);
+  max-width: 52ch;
+  font-size: clamp(1rem, 1.05vw, 1.075rem);
+  line-height: 1.62;
+  color: var(--lp-dim);
+}
+
+/* ---- the plan: what happens after sign-in ---- */
+
+.lp-plan-head {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--lp-muted);
+  margin-bottom: 0.85rem;
+}
+
+.lp-steps {
+  list-style: none;
+  margin: 0 0 clamp(1.1rem, 2.6vh, 1.75rem);
+  padding: 0;
+  display: grid;
+  gap: clamp(0.6rem, 1.4vh, 0.95rem);
+  max-width: 58ch;
+}
+
+.lp-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: start;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--lp-muted);
+}
+
+.lp-step strong {
+  font-weight: 500;
+  color: var(--lp-dim);
+}
+
+.lp-step-n {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 0.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line);
+  background: var(--lp-panel);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--lp-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hairline joining the three markers into one sequence. */
+.lp-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 26px;
+  height: calc(100% - 20px);
+  width: 1px;
+  background: var(--lp-line-soft);
+}
+
+/* ---- call to action ---- */
+
+.lp-cta {
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.72rem 1.25rem;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--lp-on-accent);
+  background: var(--lp-accent);
+  cursor: pointer;
+  box-shadow: 0 8px 22px -12px rgba(61, 220, 151, 0.75);
+  transition: background 0.16s var(--lp-ease), transform 0.16s var(--lp-ease),
+    box-shadow 0.16s var(--lp-ease);
+}
+
+.lp-cta:hover {
+  background: #55e6a8;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px -12px rgba(61, 220, 151, 0.8);
+}
+
+.lp-cta:active {
+  transform: translateY(0);
+}
+
+.lp-cta-arrow {
+  transition: transform 0.16s var(--lp-ease);
+}
+
+.lp-cta:hover .lp-cta-arrow {
+  transform: translateX(2px);
+}
+
+.lp-cta-note {
+  margin-top: 1.1rem;
+  font-size: 13px;
+  color: var(--lp-muted);
+  max-width: 48ch;
+  text-wrap: pretty;
+}
+
+.lp-trust {
+  margin-top: clamp(1rem, 2.2vh, 1.4rem);
+  padding: 0.75rem 0.95rem 0.8rem;
+  border: 1px solid var(--lp-line-soft);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.016);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--lp-muted);
+  max-width: 54ch;
+}
+
+.lp-trust strong {
+  font-weight: 600;
+  color: var(--lp-dim);
+}
+
+/* ---- notices ---- */
+
+.lp-notice {
+  margin-bottom: 1.15rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid rgba(224, 179, 85, 0.28);
+  background: rgba(224, 179, 85, 0.1);
+  color: var(--lp-amber);
+  font-size: 13.5px;
+  line-height: 1.55;
+  max-width: 46ch;
+}
+
+.lp-notice code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+/* -----------------------------------------------------------------------------
+   Proof — one real, pre-scored job
+   -------------------------------------------------------------------------- */
+
+.lp-card {
+  border: 1px solid var(--lp-line);
+  border-radius: var(--lp-radius);
+  background: linear-gradient(180deg, var(--lp-panel), var(--lp-panel-2));
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+}
+
+.lp-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.8rem 1.4rem;
+  border-bottom: 1px solid var(--lp-line-soft);
+  background: var(--lp-raise);
+  font-size: 13px;
+  color: var(--lp-muted);
+}
+
+.lp-src {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 12px;
+  color: var(--lp-faint);
+}
+
+.lp-src b {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--lp-muted);
+}
+
+.lp-job {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1.3rem;
+  align-items: center;
+  padding: clamp(1.25rem, 2.6vh, 1.6rem) 1.4rem;
+}
+
+/* The score is the product's whole output, so it gets the one true focal
+   point: a thin ring drawn with a conic gradient, digits in mono. */
+.lp-ring {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.lp-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--lp-ring-color, var(--lp-muted)) calc(var(--lp-p, 0) * 1%),
+    rgba(255, 255, 255, 0.07) 0
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+}
+
+.lp-ring.is-strong {
+  --lp-ring-color: var(--lp-accent);
+}
+
+.lp-ring-num {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--lp-dim);
+}
+
+.lp-ring.is-strong .lp-ring-num {
+  color: var(--lp-accent);
+}
+
+.lp-ring-cap {
+  margin-top: 0.2rem;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--lp-faint);
+}
+
+.lp-job-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -0.015em;
+  color: var(--lp-text);
+}
+
+.lp-job-meta {
+  margin-top: 0.35rem;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--lp-muted);
+}
+
+.lp-job-meta b {
+  font-weight: 500;
+  color: var(--lp-dim);
+}
+
+/* ---- the data strip: mono lives here and nowhere else ---- */
+
+/* One row, equal cells, however many facts the job happens to carry. */
+.lp-facts {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  border-top: 1px solid var(--lp-line-soft);
+}
+
+.lp-fact {
+  padding: 0.75rem 1.4rem 0.85rem;
+  min-width: 0;
+}
+
+.lp-fact + .lp-fact {
+  border-left: 1px solid var(--lp-line-soft);
+}
+
+.lp-fact-k {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--lp-faint);
+}
+
+.lp-fact-v {
+  margin-top: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--lp-dim);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ---- the model's reasoning, given room to be read ---- */
+
+.lp-why {
+  padding: clamp(1rem, 2.2vh, 1.25rem) 1.4rem;
+  border-top: 1px solid var(--lp-line-soft);
+}
+
+.lp-why-k {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lp-muted);
+  margin-bottom: 0.35rem;
+}
+
+.lp-why-t {
+  font-size: 15px;
+  line-height: 1.62;
+  color: var(--lp-dim);
+}
+
+.lp-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1rem;
+  padding: 0.85rem 1.4rem 0.95rem;
+  border-top: 1px solid var(--lp-line-soft);
+  background: var(--lp-raise);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--lp-faint);
+}
+
+.lp-card-foot p {
+  flex: 1 1 22ch;
+}
+
+/* Proof that the posting is real, not a mock-up. */
+.lp-posting {
+  flex: none;
+  margin-left: auto;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--lp-muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 0.16s var(--lp-ease), border-color 0.16s var(--lp-ease);
+}
+
+.lp-posting:hover {
+  color: var(--lp-accent);
+  border-bottom-color: var(--lp-accent-line);
+}
+
+/* -----------------------------------------------------------------------------
+   Footer — the honest data note
+   -------------------------------------------------------------------------- */
+
+.lp-foot {
+  flex: none;
+  border-top: 1px solid var(--lp-line-soft);
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.lp-foot-inner {
+  max-width: var(--lp-max);
+  margin: 0 auto;
+  padding: 0.9rem var(--lp-gutter) 1.05rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1rem;
+}
+
+.lp-foot-k {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lp-muted);
+  flex: none;
+}
+
+.lp-foot-t {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--lp-faint);
+  max-width: 82ch;
+}
+
+/* -----------------------------------------------------------------------------
+   Motion — one staggered arrival on load, then stillness
+   -------------------------------------------------------------------------- */
+
+@keyframes lp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lp-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.lp-intro,
+.lp-plan,
+.lp-proof {
+  animation: lp-rise 0.5s var(--lp-ease) both;
+}
+
+.lp-plan {
+  animation-delay: 0.07s;
+}
+
+.lp-proof {
+  animation-delay: 0.14s;
+}
+
+/* -----------------------------------------------------------------------------
+   Large screens — the proof card is the page's centre of gravity, so it takes
+   the extra room rather than the paragraphs, which stay at a readable measure.
+   -------------------------------------------------------------------------- */
+
+@media (min-width: 90rem) and (min-height: 860px) {
+  /* Vertical room only — widening the side padding would squeeze the salary
+     out of its cell in the three-up data strip. */
+  .lp-job {
+    padding-top: 1.7rem;
+    padding-bottom: 1.7rem;
+  }
+
+  .lp-why {
+    padding-top: 1.35rem;
+    padding-bottom: 1.35rem;
+  }
+
+  .lp-ring {
+    width: 100px;
+    height: 100px;
+  }
+
+  .lp-ring-num {
+    font-size: 32px;
+  }
+
+  .lp-job-title {
+    font-size: 1.45rem;
+  }
+
+  .lp-why-t {
+    font-size: 15.5px;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Short laptops — a 1280x800 screen has ~700px of usable height, so the page
+   tightens rather than spilling below the fold. Nothing is hidden or shrunk to
+   illegibility; the rhythm just gets one notch closer.
+   -------------------------------------------------------------------------- */
+
+@media (min-width: 63rem) and (max-height: 880px) {
+  .lp-top-inner {
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+  }
+
+  .lp-hero {
+    padding-top: 1.35rem;
+    padding-bottom: 1.35rem;
+    row-gap: 1.1rem;
+  }
+
+  .lp-title {
+    font-size: clamp(1.9rem, 3vw, 2.6rem);
+  }
+
+  .lp-lede {
+    margin-top: 1.05rem;
+  }
+
+  .lp-steps {
+    margin-bottom: 1.05rem;
+  }
+
+  .lp-cta-note {
+    margin-top: 0.8rem;
+  }
+
+  .lp-trust {
+    margin-top: 0.9rem;
+  }
+
+  .lp-foot-inner {
+    padding-top: 0.75rem;
+    padding-bottom: 0.85rem;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Narrow screens — one column, proof still second
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 62rem) {
+  .lp-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'intro' 'proof' 'plan';
+    grid-template-rows: auto auto auto;
+    align-content: start;
+    row-gap: clamp(1.5rem, 3vh, 2.25rem);
+    max-width: 44rem;
+  }
+
+  .lp-intro,
+  .lp-plan {
+    align-self: auto;
+  }
+
+  .lp-lede,
+  .lp-steps,
+  .lp-trust,
+  .lp-notice {
+    max-width: none;
+  }
+}
+
+@media (max-width: 34rem) {
+  .lp-top-inner {
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+  }
+
+  .lp-title {
+    font-size: clamp(1.85rem, 8.5vw, 2.3rem);
+  }
+
+  .lp-cta {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .lp-job {
+    gap: 1rem;
+    padding: 1.15rem 1.15rem;
+  }
+
+  .lp-ring {
+    width: 76px;
+    height: 76px;
+  }
+
+  .lp-ring-num {
+    font-size: 26px;
+  }
+
+  .lp-job-title {
+    font-size: 1.2rem;
+  }
+
+  .lp-card-top,
+  .lp-fact,
+  .lp-why,
+  .lp-card-foot {
+    padding-left: 1.15rem;
+    padding-right: 1.15rem;
+  }
+
+  /* Two up, so the strip stays two short rows instead of a stack of three. */
+  .lp-facts {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lp-fact + .lp-fact {
+    border-left: none;
+  }
+
+  .lp-fact:nth-child(2n) {
+    border-left: 1px solid var(--lp-line-soft);
+  }
+
+  .lp-fact:nth-child(n + 3) {
+    border-top: 1px solid var(--lp-line-soft);
+  }
+
+  .lp-card-foot {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+
+  /* The paragraph's flex-grow works down the column here, which would open a
+     gap the height of the card between it and the link. */
+  .lp-card-foot p {
+    flex: none;
+  }
+
+  .lp-posting {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-intro,
+  .lp-plan,
+  .lp-proof,
+  .lp-dot {
+    animation: none;
+  }
+
+  .lp-cta:hover {
+    transform: none;
+  }
+}

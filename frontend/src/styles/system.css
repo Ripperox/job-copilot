@@ -1,146 +1,165 @@
 /* =============================================================================
-   Job Copilot — shared design system
-   Extracted from rishit-portfolio, which took its palette from apeing-fe.
+   Job Copilot — design system
 
-   THE POINT OF THIS FILE
-   Every component style must be built from these primitives. The palette was
-   already right; what made the UI feel machine-made was the composition —
-   evenly-padded cards, sans-serif body copy, no texture, no hierarchy of voice.
-   The idioms below are what make it read as a hand-built trading terminal.
+   WHAT THIS APP IS
+   A tool someone uses while job-hunting: often anxious, often daily, reading a
+   lot of dense text and making judgement calls. It must feel calm, warm and
+   trustworthy. Think a well-made professional tool — Linear, Height, Things —
+   that happens to be dark. NOT a hacking terminal.
 
-   RULES
-   - Body copy is MONO. Display font is reserved for headings and numbers.
-   - Section headers use the `$ command` idiom with an index and a rule.
-   - Micro-labels are 10-11px, uppercase, letterspaced 0.18-0.22em, muted.
-   - One accent colour. Do not introduce a second. Status hues are for status.
-   - Borders are hairlines at 6-10% white, never solid grey.
+   CORRECTION (v2). v1 copied the portfolio's tech-noir styling wholesale. That
+   was wrong: a portfolio is a showcase where terminal cosplay is fun, but here
+   it made the product feel robotic and cold, and the all-caps letterspaced
+   labels were tiring to read. Keep the dark palette and the green accent; drop
+   the costume.
+
+   THE RULES
+   1. PROSE IS SANS. Geist for anything a human reads as language — headings,
+      descriptions, labels, buttons, body copy.
+      MONO IS FOR DATA ONLY. Scores, counts, dates, ids, key masks, code.
+   2. Sentence case. Uppercase is reserved for very short status words, and
+      never with heavy letterspacing.
+   3. Generous line-height (1.6) and real paragraph width limits. This app is
+      mostly reading.
+   4. Fill the viewport. Content must not stop two-thirds down a tall screen.
+   5. One accent. Green means "good / actionable", nothing else.
+   6. Restraint over ornament: no scanlines, no grain, no glow on text, no
+      corner ticks scattered around. Texture only where it earns its place.
    ============================================================================= */
 
 :root {
-  /* apeing black scale */
-  --bg: #09090b;
-  --bg-elev: #0f0f11;
-  --panel: #131315;
-  --panel-2: #0c0c0e;
+  /* Dark, but slightly warm — pure black reads clinical. */
+  --bg: #0c0c0e;
+  --bg-elev: #121214;
+  --panel: #17171a;
+  --panel-2: #1d1d21;
+  --panel-hover: #202024;
 
-  --line: rgba(255, 255, 255, 0.1);
-  --line-soft: rgba(255, 255, 255, 0.06);
-  --line-strong: #2c2c2e;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-soft: rgba(255, 255, 255, 0.05);
+  --line-strong: rgba(255, 255, 255, 0.14);
 
-  --text: #ededf0;
-  --text-dim: #a1a1a8;
-  --muted: #8a8a90;
-  --faint: #5c5c63;
+  /* Readable text ramp. --muted must stay legible; it carries real content. */
+  --text: #f2f2f4;
+  --text-dim: #c3c3c9;
+  --muted: #9b9ba3;
+  --faint: #6e6e77;
 
-  /* One accent. AlphaRooms neon green. */
-  --accent: #00ff9d;
-  --accent-rgb: 0, 255, 157;
-  --accent-hover: #33ffb0;
-  --accent-dim: rgba(0, 255, 157, 0.12);
-  --accent-ring: rgba(0, 255, 157, 0.3);
-  --on-accent: #05140c;
-  --glow: 0 4px 16px rgba(0, 255, 157, 0.28);
+  --accent: #3ddc97;
+  --accent-rgb: 61, 220, 151;
+  --accent-hover: #55e6a8;
+  --accent-dim: rgba(61, 220, 151, 0.12);
+  --accent-ring: rgba(61, 220, 151, 0.34);
+  --on-accent: #06251a;
 
-  /* Status hues — used ONLY for state, never decoration. */
-  --teal: #3fdfbe;
-  --cyan: #57a5df;
-  --amber: #d8b14a;
-  --red: #ef4444;
-  --grey: #8a8a90;
+  /* Status hues — softened so a screen of them is not a christmas tree. */
+  --teal: #4ecdc4;
+  --cyan: #6aa9e9;
+  --amber: #e0b355;
+  --red: #e56a6a;
+  --grey: #9b9ba3;
 
-  --teal-bg: rgba(63, 223, 190, 0.13);
-  --cyan-bg: rgba(87, 165, 223, 0.13);
-  --amber-bg: rgba(216, 177, 74, 0.13);
-  --red-bg: rgba(239, 68, 68, 0.13);
-  --grey-bg: rgba(138, 138, 144, 0.12);
+  --teal-bg: rgba(78, 205, 196, 0.12);
+  --cyan-bg: rgba(106, 169, 233, 0.12);
+  --amber-bg: rgba(224, 179, 85, 0.12);
+  --red-bg: rgba(229, 106, 106, 0.12);
+  --grey-bg: rgba(155, 155, 163, 0.1);
 
-  --font-display: 'Geist', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Roboto Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
-  --radius: 8px;
-  --radius-sm: 6px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  /* Softer corners — sharp squares are part of what read as robotic. */
+  --radius: 10px;
+  --radius-sm: 7px;
+  --radius-lg: 14px;
 
-  /* Motion — short and mechanical, never bouncy. */
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --fast: 0.12s;
-  --base: 0.18s;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --fast: 0.14s;
+  --base: 0.22s;
+
+  /* Layout — used so pages fill the screen instead of floating in a void. */
+  --page-max: 78rem;
+  --page-pad: 1.5rem;
+
+  /* ---------------------------------------------------------------------
+     Legacy aliases.
+
+     index.css still carries the original stylesheet and its rules reference
+     these older names. Rather than delete rules that are still rendering,
+     point the old names at the v2 values so anything not yet rebuilt inherits
+     the corrected palette instead of the neon v1 one. Remove these once
+     index.css has been retired.
+     -------------------------------------------------------------------- */
+  --surface: var(--panel);
+  --surface-2: var(--bg-elev);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --text-muted: var(--muted);
+  --green: var(--teal);
+  --green-bg: var(--teal-bg);
+  --blue: var(--cyan);
+  --blue-bg: var(--cyan-bg);
+  --glow: var(--shadow-lift);
 }
 
 /* -----------------------------------------------------------------------------
-   Typographic voice
+   Base — sans-first, comfortable to read
    -------------------------------------------------------------------------- */
 
-/* The single biggest signal. Terminal UIs are mono by default; sans-by-default
-   is what makes an interface read as a generic dashboard template. */
-.u-mono { font-family: var(--font-mono); }
-.u-display { font-family: var(--font-display); }
-
-/* Micro-label: the recurring "SECTION · 11px · letterspaced" device. */
-.u-label {
+.u-mono {
   font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1;
-  letter-spacing: 0.2em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Numbers you compare down a column. */
+.u-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* A quiet label. Sentence case, NOT letterspaced caps. */
+.u-label {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* The only place caps are allowed: a very short status word. */
+.u-tag {
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--faint);
 }
 
-.u-num {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
-
 /* -----------------------------------------------------------------------------
-   Section header — `01 ── $ command` then a display-font title.
-   Use for every major region so the app has a consistent spine.
+   Section headings — a plain, confident heading. No `$ command` costume.
    -------------------------------------------------------------------------- */
 
-.sec {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.6rem;
-}
-
-.sec-index {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  color: var(--line-strong);
-}
-
-.sec-rule {
-  height: 1px;
-  width: 2rem;
-  background: var(--line);
-  flex: none;
-}
-
-.sec-cmd {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
 .sec-title {
-  font-family: var(--font-display);
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--font-sans);
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
   color: var(--text);
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.3rem;
 }
 
 .sec-sub {
-  font-size: 12.5px;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
   line-height: 1.6;
   color: var(--muted);
   margin: 0;
-  max-width: 62ch;
+  max-width: 60ch;
 }
 
 /* -----------------------------------------------------------------------------
@@ -154,121 +173,91 @@
 }
 
 .panel-inset {
-  background: var(--panel-2);
+  background: var(--bg-elev);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
 }
 
-/* Corner ticks — cheap, and instantly reads as "instrument panel" rather than
-   "card component". Apply to a position:relative container. */
-.corner-frame::before,
-.corner-frame::after {
-  content: '';
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-color: var(--line-strong);
-  border-style: solid;
-  pointer-events: none;
-}
-.corner-frame::before {
-  top: -1px;
-  left: -1px;
-  border-width: 1px 0 0 1px;
-}
-.corner-frame::after {
-  bottom: -1px;
-  right: -1px;
-  border-width: 0 1px 1px 0;
-}
-
 /* -----------------------------------------------------------------------------
-   Texture — subtle. If you can consciously see it, it is too strong.
+   Status
    -------------------------------------------------------------------------- */
 
-.grid-bg {
-  background-image:
-    linear-gradient(var(--line-soft) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-
-.scanlines::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0 2px,
-    rgba(255, 255, 255, 0.012) 2px 3px
-  );
-}
-
-/* -----------------------------------------------------------------------------
-   Status — one hue per pipeline state, used consistently everywhere.
-   -------------------------------------------------------------------------- */
-
-.st-new      { --st: var(--grey); --st-bg: var(--grey-bg); }
-.st-outreach { --st: var(--amber); --st-bg: var(--amber-bg); }
-.st-applied  { --st: var(--cyan); --st-bg: var(--cyan-bg); }
-.st-interview{ --st: var(--teal); --st-bg: var(--teal-bg); }
-.st-rejected { --st: var(--red); --st-bg: var(--red-bg); }
+.st-new       { --st: var(--grey);  --st-bg: var(--grey-bg); }
+.st-outreach  { --st: var(--amber); --st-bg: var(--amber-bg); }
+.st-applied   { --st: var(--cyan);  --st-bg: var(--cyan-bg); }
+.st-interview { --st: var(--teal);  --st-bg: var(--teal-bg); }
+.st-rejected  { --st: var(--red);   --st-bg: var(--red-bg); }
 
 .u-pill {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  padding: 0.22rem 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 0.2rem 0.55rem;
   border-radius: 999px;
   color: var(--st, var(--muted));
   background: var(--st-bg, var(--grey-bg));
-  border: 1px solid color-mix(in srgb, var(--st, var(--muted)) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--st, var(--muted)) 22%, transparent);
   white-space: nowrap;
 }
 
-/* A live indicator — small, pulsing, used sparingly for "this is running". */
-.live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--accent);
-  box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.6);
-  animation: live-pulse 2s var(--ease) infinite;
-  flex: none;
-}
-
-@keyframes live-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.5); }
-  70%  { box-shadow: 0 0 0 5px rgba(var(--accent-rgb), 0); }
-  100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0); }
-}
-
 /* -----------------------------------------------------------------------------
-   Motion — entrances are 1 short fade+rise, never staggered springs.
+   Motion — gentle. Nothing blinks; blinking is stressful.
    -------------------------------------------------------------------------- */
 
 @keyframes rise {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
 
 .u-rise { animation: rise var(--base) var(--ease) both; }
 
+/* A calm activity indicator — a slow breathe, not a strobe. */
+@keyframes breathe {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: breathe 2.4s var(--ease) infinite;
+  flex: none;
+}
+
+/* Skeleton shimmer for real loading states. */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+.u-skeleton {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--panel) 25%,
+    var(--panel-hover) 50%,
+    var(--panel) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .u-rise, .live-dot { animation: none; }
+  .u-rise, .live-dot, .u-skeleton { animation: none; }
   * { transition-duration: 0.01ms !important; }
 }
 
 /* -----------------------------------------------------------------------------
-   Focus — visible, accent-coloured, never removed.
+   Focus
    -------------------------------------------------------------------------- */
 
 :where(button, a, input, select, textarea):focus-visible {
-  outline: 1px solid var(--accent);
+  outline: 2px solid var(--accent-ring);
   outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }

@@ -26,10 +26,9 @@ function fromCsv(value: string): string[] {
     .filter((s) => s.length > 0)
 }
 
-// One register of the config table: micro-label + syntax note in the left
-// gutter, the control on the right. The whole row lights its left edge when
-// anything inside it takes focus.
-function Register({
+// One setting: name and explanation on the left, the control on the right.
+// The ordinary shape of settings in a well-made product.
+function Setting({
   id,
   label,
   note,
@@ -57,7 +56,7 @@ function Register({
 // before you hit save. Same parser the save payload uses.
 function Tokens({ value }: { value: string }) {
   const items = fromCsv(value)
-  if (items.length === 0) return <p className="pf-tokens-empty">none set</p>
+  if (items.length === 0) return <p className="pf-tokens-empty">Nothing set yet</p>
   return (
     <div className="pf-tokens">
       {items.map((item, i) => (
@@ -170,82 +169,51 @@ export default function ProfileView({
 
   if (loading) {
     return (
-      <div className="pf-boot" role="status">
-        <span className="pf-boot-cmd">$ load profile</span>
-        <span>Loading profile…</span>
-        <span className="pf-caret" aria-hidden="true" />
+      <div className="pf-loading" role="status">
+        <span className="live-dot" aria-hidden="true" />
+        Loading your profile…
       </div>
     )
   }
 
-  // Readouts — derived from what is on screen, nothing fetched.
+  // Counts, derived from what is on screen — nothing fetched.
   const chars = resumeText.length
   const lines = resumeText.length === 0 ? 0 : resumeText.split('\n').length
 
   return (
     <div className="pf">
-      <header>
-        <div className="pf-masthead">
-          <span className="pf-masthead-id">profile · config</span>
-          <div className="pf-readout">
-            <span className="pf-readout-cell">
-              <span className="pf-readout-key">résumé</span>
-              <span className="pf-readout-val">{chars.toLocaleString()}c</span>
-            </span>
-            <span className="pf-readout-cell">
-              <span className="pf-readout-key">roles</span>
-              <span className="pf-readout-val">{fromCsv(roles).length}</span>
-            </span>
-            <span className="pf-readout-cell">
-              <span className="pf-readout-key">locations</span>
-              <span className="pf-readout-val">{fromCsv(locations).length}</span>
-            </span>
-            <span className="pf-readout-cell">
-              <span className="pf-readout-key">ceiling</span>
-              <span className="pf-readout-val">
-                {maxYoE.trim() === '' ? '—' : `${maxYoE.trim()}y`}
-              </span>
-            </span>
-          </div>
-        </div>
+      <header className="pf-head">
+        <h1 className="pf-h1">Profile</h1>
         <p className="pf-lede">
-          This is what the copilot uses to score and match jobs for you.
+          This is what Job Copilot uses to score and match jobs for you. Your résumé
+          is what every role gets compared against; everything else narrows the
+          search.
         </p>
       </header>
 
       {error && (
         <div className="pf-alert" role="alert">
-          <span className="pf-alert-tag">err</span>
-          <span>{error}</span>
+          {error}
         </div>
       )}
 
-      {/* ---- 01 résumé ------------------------------------------------- */}
       <section className="pf-sec">
-        <div className="sec">
-          <span className="sec-index">01</span>
-          <span className="sec-rule" />
-          <span className="sec-cmd">$ cat resume.txt</span>
-        </div>
-        <h2 className="sec-title">Résumé source</h2>
+        <h2 className="sec-title">Your résumé</h2>
         <p className="sec-sub">
-          The one document the scorer actually reads. Everything below only narrows
-          the search; this is what every role gets compared against.
+          The one document the scorer actually reads. Paste the whole thing rather
+          than a summary — bullets, stack, dates, numbers. Formatting is ignored.
         </p>
 
-        <div className="pf-doc corner-frame">
+        <div className="pf-doc">
           <div className="pf-doc-bar">
             <label className="pf-doc-name" htmlFor="pf-resume">
-              resume.txt
+              Résumé text
             </label>
-            <div className="pf-doc-meta">
-              <span className="pf-doc-meta-cell">
-                chars <span className="pf-doc-meta-val">{chars.toLocaleString()}</span>
-              </span>
-              <span className="pf-doc-meta-cell">
-                lines <span className="pf-doc-meta-val">{lines.toLocaleString()}</span>
-              </span>
-            </div>
+            <p className="pf-doc-meta">
+              <span className="u-num">{chars.toLocaleString()}</span> characters
+              {' · '}
+              <span className="u-num">{lines.toLocaleString()}</span> lines
+            </p>
           </div>
           <textarea
             id="pf-resume"
@@ -255,31 +223,21 @@ export default function ProfileView({
             placeholder="Paste your full resume text here…"
             onChange={(e) => setResumeText(e.target.value)}
           />
-          <div className="pf-doc-foot">
-            Plain text — bullets, stack, dates, numbers. Formatting is ignored, so paste
-            the whole thing rather than a summary.
-          </div>
         </div>
       </section>
 
-      {/* ---- 02 match parameters --------------------------------------- */}
       <section className="pf-sec">
-        <div className="sec">
-          <span className="sec-index">02</span>
-          <span className="sec-rule" />
-          <span className="sec-cmd">$ set --match</span>
-        </div>
-        <h2 className="sec-title">Match parameters</h2>
+        <h2 className="sec-title">Matching preferences</h2>
         <p className="sec-sub">
-          Filters applied before scoring. Lists are split on commas — the tokens under
-          each field are exactly what gets stored.
+          Filters applied before scoring. Lists are separated by commas — the chips
+          under each field are exactly what gets stored.
         </p>
 
         <div className="pf-reg">
-          <Register
+          <Setting
             id="pf-roles"
-            label="roles"
-            note="Titles worth surfacing. e.g. Backend Engineer, Node.js Developer"
+            label="Roles"
+            note="Titles worth surfacing. For example: Backend Engineer, Node.js Developer"
           >
             <input
               id="pf-roles"
@@ -288,12 +246,12 @@ export default function ProfileView({
               onChange={(e) => setRoles(e.target.value)}
             />
             <Tokens value={roles} />
-          </Register>
+          </Setting>
 
-          <Register
+          <Setting
             id="pf-locations"
-            label="locations"
-            note="Where you will actually work. e.g. Bengaluru, Remote"
+            label="Locations"
+            note="Where you will actually work. For example: Bengaluru, Remote"
           >
             <input
               id="pf-locations"
@@ -302,12 +260,12 @@ export default function ProfileView({
               onChange={(e) => setLocations(e.target.value)}
             />
             <Tokens value={locations} />
-          </Register>
+          </Setting>
 
-          <Register
+          <Setting
             id="pf-musthaves"
-            label="must-haves"
-            note="Deal-breakers. e.g. Remote, No on-call"
+            label="Must-haves"
+            note="Deal-breakers. For example: Remote, No on-call"
           >
             <input
               id="pf-musthaves"
@@ -316,12 +274,12 @@ export default function ProfileView({
               onChange={(e) => setMustHaves(e.target.value)}
             />
             <Tokens value={mustHaves} />
-          </Register>
+          </Setting>
 
-          <Register
+          <Setting
             id="pf-cvvariants"
-            label="cv variants"
-            note="Labels for the résumé versions you keep. e.g. Backend, Fullstack, Platform"
+            label="CV variants"
+            note="Labels for the résumé versions you keep. For example: Backend, Fullstack, Platform"
           >
             <input
               id="pf-cvvariants"
@@ -330,11 +288,11 @@ export default function ProfileView({
               onChange={(e) => setCvVariants(e.target.value)}
             />
             <Tokens value={cvVariants} />
-          </Register>
+          </Setting>
 
-          <Register
+          <Setting
             id="pf-maxyoe"
-            label="experience ceiling"
+            label="Experience ceiling"
             note={
               <>
                 Roles asking for more — senior / lead / principal, or “N+ years” — are
@@ -354,14 +312,14 @@ export default function ProfileView({
                 onChange={(e) => setMaxYoE(e.target.value)}
               />
               <span className="pf-unit" aria-hidden="true">
-                yrs
+                years
               </span>
             </span>
-          </Register>
+          </Setting>
 
-          <Register
+          <Setting
             id="pf-salary"
-            label="salary floor"
+            label="Salary floor"
             note="Minimum acceptable, in lakhs per annum. Leave blank for none."
           >
             <span className="pf-num">
@@ -375,19 +333,19 @@ export default function ProfileView({
                 onChange={(e) => setSalaryFloor(e.target.value)}
               />
               <span className="pf-unit" aria-hidden="true">
-                lpa
+                LPA
               </span>
             </span>
-          </Register>
+          </Setting>
         </div>
 
         <div className="pf-commit">
-          <span className="pf-commit-note">
-            Edits stay local until you save. The server normalises the lists and hands
-            them straight back.
-          </span>
+          <p className="pf-commit-note">
+            Edits stay on this page until you save. The server tidies up the lists and
+            hands them straight back.
+          </p>
           <div className="pf-commit-actions">
-            {saved && <span className="pf-saved">Saved ✓</span>}
+            {saved && <span className="pf-saved">Saved</span>}
             <button
               className="pf-btn pf-btn-go"
               onClick={handleSave}
@@ -399,17 +357,10 @@ export default function ProfileView({
         </div>
       </section>
 
-      {/* ---- 03 scoring key -------------------------------------------- */}
       <KeySettings onUnauthorized={onUnauthorized} />
 
-      {/* ---- 04 danger zone -------------------------------------------- */}
       <section className="pf-sec pf-sec-danger">
-        <div className="sec">
-          <span className="sec-index">04</span>
-          <span className="sec-rule" />
-          <span className="sec-cmd">$ rm -rf --account</span>
-        </div>
-        <h2 className="sec-title">Danger zone</h2>
+        <h2 className="sec-title">Delete account</h2>
         <p className="sec-sub">
           Deleting your account permanently removes your résumé, scores, pipeline and
           outreach drafts. Shared job listings are not affected. This cannot be undone.
@@ -417,21 +368,20 @@ export default function ProfileView({
 
         <div className={`pf-danger${confirmingDelete ? ' pf-danger-armed' : ''}`}>
           <div className="pf-led">
-            <span className="pf-led-term">removed</span>
-            <span>résumé · scores &amp; reasons · pipeline &amp; notes · outreach drafts</span>
+            <span className="pf-led-term">Deleted</span>
+            <span>Your résumé, scores and reasons, pipeline and notes, outreach drafts</span>
           </div>
           <div className="pf-led pf-led-keep">
-            <span className="pf-led-term">untouched</span>
-            <span>shared job listings — those are not yours to delete</span>
+            <span className="pf-led-term">Kept</span>
+            <span>Shared job listings — those are not yours to delete</span>
           </div>
 
           <div className="pf-danger-act">
             {confirmingDelete ? (
               <>
-                <span className="pf-danger-arm">
-                  <span className="pf-danger-arm-cmd">confirm</span>
-                  <span>Everything in the first row goes. There is no undo and no export.</span>
-                </span>
+                <p className="pf-danger-arm">
+                  Everything in the first row goes. There is no undo and no export.
+                </p>
                 <button
                   className="pf-btn pf-btn-red pf-btn-red-armed"
                   onClick={handleDeleteAccount}
