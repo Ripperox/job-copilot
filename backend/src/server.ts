@@ -14,6 +14,7 @@ import { generateOutreach } from './outreach';
 import { llmProvider, llmComplete, isRateLimit } from './llm';
 import { encryptSecret, maskKey } from './crypto';
 import { llmConfigForUser, detectProvider, configForKey } from './user-llm';
+import { providerStatus } from './scrapers';
 import { buildAuthUrl, exchangeCodeForIdentity } from './auth/google';
 import { setSessionCookie, clearSessionCookie, sessionCookieOptions } from './auth/session';
 import { attachUser, requireAuth } from './auth/middleware';
@@ -315,10 +316,24 @@ app.post('/api/rescore', async (req, res) => {
 app.get('/api/jobs', async (req, res) => {
   const minScore = Number(req.query.minScore) || 0;
   const includeDismissed = req.query.includeDismissed === 'true';
+  // ?source=scraped powers the career-pages dashboard; omit for everything.
+  const source = typeof req.query.source === 'string' ? req.query.source : '';
   const jobs = (await db.scoredJobs(req.userId!))
     .filter((j) => (j.score ?? 0) >= minScore)
-    .filter((j) => includeDismissed || !j.dismissed);
+    .filter((j) => includeDismissed || !j.dismissed)
+    .filter((j) => !source || j.source === source);
   res.json(jobs);
+});
+
+// Which job sources currently have jobs in the pool, and how many. Drives the
+// dashboard's source tabs.
+app.get('/api/sources', requireAuth, async (_req, res) => {
+  const counts = new Map<string, number>();
+  for (const job of await db.allJobs()) counts.set(job.source, (counts.get(job.source) ?? 0) + 1);
+  res.json({
+    sources: [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
+    scrapers: providerStatus(config),
+  });
 });
 
 // Update a job's pipeline status, notes, or dismissed flag.

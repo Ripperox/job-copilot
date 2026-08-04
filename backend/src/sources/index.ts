@@ -7,6 +7,7 @@ import { fetchLeverJobs } from './lever';
 import { fetchJSearchJobs } from './jsearch';
 import { fetchJoobleJobs } from './jooble';
 import { fetchFantasticJobs } from './fantastic';
+import { fetchScrapedJobs } from './scraped';
 
 // Aggregates all configured job sources. Falls back to the mock set so the app
 // is usable with zero API keys. New sources (Greenhouse, Lever, ...) plug in here.
@@ -97,6 +98,19 @@ export async function gatherJobs(profile: Profile, config: Config): Promise<{ jo
       gotReal = true;
     } catch (e) {
       console.error('LinkedIn Jobs source failed:', e);
+    }
+  }
+
+  // Company career pages. Unlike the aggregators above, these carry roles that
+  // are earlier and far less competed — often before they syndicate anywhere.
+  if (config.scrapeCareerPages.length > 0) {
+    try {
+      const s = await fetchScrapedJobs(profile, config);
+      jobs.push(...s);
+      sources.push(`scraped(${s.length})`);
+      gotReal = true;
+    } catch (e) {
+      console.error('Scraped career pages failed:', e);
     }
   }
 

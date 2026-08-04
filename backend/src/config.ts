@@ -31,6 +31,17 @@ export const config = {
   greenhouseBoards: (process.env.GREENHOUSE_BOARDS || '').split(',').map((s) => s.trim()).filter(Boolean),
   leverBoards: (process.env.LEVER_BOARDS || '').split(',').map((s) => s.trim()).filter(Boolean),
 
+  // ---- Web scraping (company career pages) ----
+  // Tried in this order; the chain falls through when one is out of quota.
+  // Jina works with no key at all, so there is always a last resort.
+  firecrawlApiKey: process.env.FIRECRAWL_API_KEY || '',
+  tavilyApiKey: process.env.TAVILY_API_KEY || '',
+  exaApiKey: process.env.EXA_API_KEY || '',
+  jinaApiKey: process.env.JINA_API_KEY || '',
+  // Comma-separated career-page URLs to scrape for openings.
+  scrapeCareerPages: (process.env.SCRAPE_CAREER_PAGES || '')
+    .split(',').map((s) => s.trim()).filter(Boolean),
+
   // ---- Auth ----
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',

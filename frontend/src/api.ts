@@ -195,8 +195,20 @@ export function rescoreJobs(): Promise<RescoreResult> {
   return request<RescoreResult>('/rescore', { method: 'POST' })
 }
 
-export function getJobs(minScore: number): Promise<ScoredJob[]> {
-  return request<ScoredJob[]>(`/jobs?minScore=${minScore}`)
+export function getJobs(minScore: number, source = ''): Promise<ScoredJob[]> {
+  const q = new URLSearchParams({ minScore: String(minScore) })
+  if (source) q.set('source', source)
+  return request<ScoredJob[]>(`/jobs?${q}`)
+}
+
+export interface SourceInfo {
+  sources: { name: string; count: number }[]
+  scrapers: { name: string; configured: boolean }[]
+}
+
+// Which job sources have jobs in the pool — drives the dashboard tabs.
+export function getSources(): Promise<SourceInfo> {
+  return request<SourceInfo>('/sources')
 }
 
 export function patchJob(

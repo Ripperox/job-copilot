@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JobStatus, ScoredJob } from '../api'
-import { JOB_STATUSES, UnauthorizedError, fetchJobs, getJobs, rescoreJobs } from '../api'
+import { JOB_STATUSES, UnauthorizedError, fetchJobs, getJobs, getSources, rescoreJobs } from '../api'
 import JobCard from './JobCard'
 
 const SCORE_OPTIONS = [0, 50, 60, 70, 80]
@@ -17,6 +17,9 @@ type StatusFilter = 'all' | JobStatus
 
 export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => void }) {
   const [minScore, setMinScore] = useState(50)
+  // '' = every source; 'scraped' = the career-pages view.
+  const [sourceFilter, setSourceFilter] = useState('')
+  const [sourceCounts, setSourceCounts] = useState<{ name: string; count: number }[]>([])
   const [jobs, setJobs] = useState<ScoredJob[]>([])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [loadingList, setLoadingList] = useState(true)
@@ -29,7 +32,7 @@ export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => v
     setLoadingList(true)
     setError(null)
     try {
-      const list = await getJobs(score)
+      const list = await getJobs(score, sourceRef.current)
       setJobs(list)
     } catch (err: unknown) {
       if (err instanceof UnauthorizedError) return onUnauthorized?.()
@@ -39,9 +42,26 @@ export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => v
     }
   }, [onUnauthorized])
 
+  // Keep the current source in a ref so loadJobs stays stable and the existing
+  // callers (fetch, rescore, filter changes) do not all need rewiring.
+  const sourceRef = useRef('')
+  useEffect(() => {
+    sourceRef.current = sourceFilter
+  }, [sourceFilter])
+
   useEffect(() => {
     void loadJobs(minScore)
-  }, [minScore, loadJobs])
+  }, [minScore, sourceFilter, loadJobs])
+
+  useEffect(() => {
+    let active = true
+    getSources()
+      .then((s) => active && setSourceCounts(s.sources))
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [jobs.length])
 
   // Local-state updates keep the summary bar + tabs accurate without a refetch.
   const handleUpdated = useCallback((updated: ScoredJob) => {
@@ -143,6 +163,36 @@ export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => v
           </select>
         </label>
       </div>
+
+      {sourceCounts.length > 1 && (
+        <div className="source-tabs" role="tablist" aria-label="Filter by source">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={sourceFilter === ''}
+            className={`source-tab${sourceFilter === '' ? ' source-tab-active' : ''}`}
+            onClick={() => setSourceFilter('')}
+          >
+            All sources
+          </button>
+          {sourceCounts.map((s) => (
+            <button
+              key={s.name}
+              type="button"
+              role="tab"
+              aria-selected={sourceFilter === s.name}
+              className={`source-tab${sourceFilter === s.name ? ' source-tab-active' : ''}${
+                s.name === 'scraped' ? ' source-tab-scraped' : ''
+              }`}
+              onClick={() => setSourceFilter(s.name)}
+              title={s.name === 'scraped' ? 'Roles read straight off company career pages' : undefined}
+            >
+              {s.name === 'scraped' ? 'career pages' : s.name}{' '}
+              <span className="status-tab-count">{s.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {!loadingList && jobs.length > 0 && (
         <div className="summary-bar">
