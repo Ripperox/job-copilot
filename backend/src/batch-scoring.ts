@@ -24,11 +24,14 @@ import { ScoreResult, gateJob, heuristicScore, scoreWithLLM } from './scoring';
 const BATCH_DESC_CHARS = 1200;
 
 // Batch sizes are provider-shaped, because the binding limit differs:
-//   gemini    — request-limited (20/day free), so batch big: 50 × ~330 tok ≈ 17k
+//   gemini    — request-limited (20/day free), so bigger is strictly better...
+//               but its reasoning tokens truncate very large batches (measured
+//               2026-08-04: 50 jobs came back with only 6 complete objects).
+//               25 still covers ~500 jobs/day within 20 requests.
 //   groq      — token-limited (12k tokens/min), so batch small enough to fit
 //   anthropic — comfortable either way
 const BATCH_SIZE: Record<string, number> = {
-  gemini: 50,
+  gemini: 25,
   groq: 20,
   anthropic: 30,
   heuristic: 0,
@@ -264,8 +267,12 @@ async function scoreWithLLMOrThrow(job: Job, profile: Profile, config: Config): 
 // Output budget: each job needs roughly 60 tokens of JSON. Add generous headroom
 // because thinking models spend output tokens on thoughts, and a truncated array
 // costs us the whole batch.
+// Reasoning models (gemini-*-latest) spend from this SAME budget on thinking
+// before emitting a character of the answer, so a tight ceiling silently
+// truncates the array. Being generous costs nothing — providers meter tokens
+// actually produced, not the ceiling requested.
 function batchMaxTokens(jobCount: number): number {
-  return Math.min(32000, 2048 + jobCount * 120);
+  return Math.min(65536, 8192 + jobCount * 400);
 }
 
 function batchPrompt(jobs: Job[], profile: Profile): string {
