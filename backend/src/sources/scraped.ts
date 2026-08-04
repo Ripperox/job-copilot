@@ -18,6 +18,12 @@ import { llmComplete, hasLLM, llmProvider, isTerminalForRun } from '../llm';
 // 413 in testing. Long pages shrink-and-retry below rather than being dropped.
 const MAX_PAGE_CHARS = 12000;
 
+// Gap between page fetches. Firecrawl's free tier is ~10 requests/minute, so
+// ~7s keeps a full window comfortably under it.
+const FETCH_SPACING_MS = Number(process.env.SCRAPE_FETCH_SPACING_MS ?? 7000);
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 // When the last scrape ran. Career pages change daily at most, while the job
 // fetch runs hourly — without this gate every tick would re-scrape every page
 // and burn the month's scraping credits in a couple of days.
@@ -67,8 +73,14 @@ export async function fetchScrapedJobs(profile: Profile, config: Config): Promis
 
   // 1. Fetch every page first. This is the cheap half (one Firecrawl credit
   //    each) and is independent of the LLM budget.
+  //
+  //    Paced: Firecrawl's free tier allows roughly 10 requests a minute, and
+  //    firing a whole window back-to-back trips it — observed as 429s from the
+  //    7th page onward. The fallback chain does rescue those via Jina, but
+  //    Firecrawl extracts better, so it is worth waiting for.
   const fetched: { url: string; content: string }[] = [];
-  for (const pageUrl of targets) {
+  for (const [i, pageUrl] of targets.entries()) {
+    if (i > 0) await sleep(FETCH_SPACING_MS);
     try {
       const { result, provider } = await scrapePage(pageUrl, config);
       if (!result.content.trim()) {
