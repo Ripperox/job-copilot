@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import type { JobStatus, Outreach, ScoredJob } from '../api'
 import { JOB_STATUSES, generateOutreach, getOutreach, patchJob } from '../api'
+import '../styles/jobcard.css'
 
-function scoreClass(score: number | null): string {
-  if (score == null) return 'score-grey'
-  if (score >= 80) return 'score-green'
-  if (score >= 50) return 'score-amber'
-  return 'score-grey'
+// The score is the card's headline instrument, so it gets its own hue channel
+// (`--sc`) rather than borrowing a status colour. Same thresholds as before.
+function scoreBand(score: number | null): 'hi' | 'mid' | 'lo' | 'none' {
+  if (score == null) return 'none'
+  if (score >= 80) return 'hi'
+  if (score >= 50) return 'mid'
+  return 'lo'
 }
 
 const STATUS_LABELS: Record<JobStatus, string> = {
@@ -17,7 +20,26 @@ const STATUS_LABELS: Record<JobStatus, string> = {
   rejected: 'Rejected',
 }
 
-function CopyButton({ text }: { text: string }) {
+// "12 Jul" — compact enough for the chrome strip, null-safe for bad input.
+function shortDate(iso: string | null): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+}
+
+// "14:32 · 12 Jul" — the draft's generation stamp.
+function stamp(iso: string): string | null {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const time = d.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  return `${time} · ${shortDate(iso)}`
+}
+
+function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false)
 
   async function copy() {
@@ -31,9 +53,24 @@ function CopyButton({ text }: { text: string }) {
   }
 
   return (
-    <button className="btn btn-outline btn-sm" onClick={copy} type="button">
+    <button
+      className={`jc-copy${copied ? ' jc-copy-on' : ''}`}
+      onClick={copy}
+      type="button"
+      aria-label={`Copy ${label}`}
+      aria-live="polite"
+    >
       {copied ? 'Copied ✓' : 'Copy'}
     </button>
+  )
+}
+
+function ErrorLine({ message }: { message: string }) {
+  return (
+    <p className="jc-err" role="alert">
+      <b className="jc-err-tag">ERR</b>
+      <span>{message}</span>
+    </p>
   )
 }
 
@@ -63,6 +100,8 @@ export default function JobCard({
   const [outreachError, setOutreachError] = useState<string | null>(null)
   const [referral, setReferral] = useState('')
   const [note, setNote] = useState('')
+
+  const uid = useId()
 
   // Cheaply load a cached draft on mount (does not generate).
   useEffect(() => {
@@ -162,58 +201,115 @@ export default function JobCard({
     await runOutreach(false)
   }
 
+  const band = scoreBand(job.score)
+  const filled =
+    job.score == null
+      ? 0
+      : Math.max(0, Math.min(10, Math.round(job.score / 10)))
+  const posted = shortDate(job.postedAt)
+  const generatedAt = outreach ? stamp(outreach.generatedAt) : null
+  const notesState = notesSaving ? 'Saving…' : notesSaved ? 'Saved ✓' : ''
+
   return (
-    <article className={`card job-card job-card-${status}`}>
-      <div className="job-head">
-        <div className={`score-badge ${scoreClass(job.score)}`}>
-          <span className="score-num">{job.score == null ? '—' : job.score}</span>
-          <span className="score-word">score</span>
-        </div>
-        <div className="job-title-block">
-          <h3 className="job-title">{job.title}</h3>
-          <div className="job-meta">
-            <span className="job-company">{job.company}</span>
-            {job.location && <span className="dot">·</span>}
-            {job.location && <span>{job.location}</span>}
-            {job.salary && <span className="dot">·</span>}
-            {job.salary && <span className="job-salary">{job.salary}</span>}
+    <article className={`jc st-${status} jc-s-${band}`}>
+      {/* Chrome strip: where it came from, when — and the live pipeline state. */}
+      <div className="jc-top">
+        <span className="jc-src">{job.source}</span>
+        {posted && <span className="jc-sep" aria-hidden="true">/</span>}
+        {posted && <span className="jc-when">posted {posted}</span>}
+        <span className="u-pill jc-state">{STATUS_LABELS[status]}</span>
+      </div>
+
+      <div className="jc-body">
+        <div className="jc-ident">
+          {/* The readout. Tabular numeral + ten-segment meter. */}
+          <div className="jc-score">
+            <span className="u-label jc-score-cap">
+              {job.score == null ? 'unscored' : 'match'}
+            </span>
+            <span className="jc-score-val">
+              {job.score == null ? '—' : job.score}
+            </span>
+            <span className="jc-meter" aria-hidden="true">
+              {Array.from({ length: 10 }, (_, i) => (
+                <span
+                  key={i}
+                  className={`jc-tick${i < filled ? ' jc-tick-on' : ''}`}
+                />
+              ))}
+            </span>
+          </div>
+
+          <div className="jc-id">
+            <h3 className="jc-title">{job.title}</h3>
+            <p className="jc-org">{job.company}</p>
+
+            {(job.location || job.salary || job.cvVariant) && (
+              <dl className="jc-spec">
+                {job.location && (
+                  <div className="jc-spec-cell">
+                    <dt className="u-label">Location</dt>
+                    <dd>{job.location}</dd>
+                  </div>
+                )}
+                {job.salary && (
+                  <div className="jc-spec-cell">
+                    <dt className="u-label">Salary</dt>
+                    <dd>{job.salary}</dd>
+                  </div>
+                )}
+                {job.cvVariant && (
+                  <div className="jc-spec-cell">
+                    <dt className="u-label">CV variant</dt>
+                    <dd>{job.cvVariant}</dd>
+                  </div>
+                )}
+              </dl>
+            )}
           </div>
         </div>
-        <span className={`status-tag status-${status}`}>
-          {STATUS_LABELS[status]}
-        </span>
+
+        {job.reason && (
+          <div className="jc-verdict">
+            <span className="u-label jc-verdict-cap">Verdict</span>
+            <p className="jc-verdict-txt">{job.reason}</p>
+          </div>
+        )}
       </div>
 
-      {job.reason && <p className="job-reason">{job.reason}</p>}
+      <div className="jc-band">
+        <span className="u-label jc-band-cap">Status</span>
+        <div className="jc-seg" role="group" aria-label="Set status">
+          {JOB_STATUSES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`jc-seg-btn st-${s}`}
+              onClick={() => changeStatus(s)}
+              disabled={statusBusy}
+              aria-pressed={s === status}
+            >
+              {STATUS_LABELS[s]}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <div className="status-control" role="group" aria-label="Set status">
-        {JOB_STATUSES.map((s) => (
-          <button
-            key={s}
-            type="button"
-            className={`status-btn status-${s}${
-              s === status ? ' status-btn-active' : ''
-            }`}
-            onClick={() => changeStatus(s)}
-            disabled={statusBusy}
-            aria-pressed={s === status}
+      <div className="jc-notes">
+        <div className="jc-notes-head">
+          <label className="u-label jc-notes-cap" htmlFor={`notes-${uid}`}>
+            Notes
+          </label>
+          <span
+            className={`jc-notes-state${notesSaved && !notesSaving ? ' jc-notes-state-ok' : ''}`}
+            aria-live="polite"
           >
-            {STATUS_LABELS[s]}
-          </button>
-        ))}
-      </div>
-
-      <div className="notes-field">
-        <div className="notes-head">
-          <span className="notes-label">Notes</span>
-          {notesSaving ? (
-            <span className="muted notes-status">Saving…</span>
-          ) : notesSaved ? (
-            <span className="notes-status notes-saved">Saved ✓</span>
-          ) : null}
+            {notesState}
+          </span>
         </div>
         <textarea
-          className="textarea notes-textarea"
+          id={`notes-${uid}`}
+          className="jc-input"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           onBlur={saveNotes}
@@ -222,97 +318,117 @@ export default function JobCard({
         />
       </div>
 
-      <div className="job-foot">
-        <div className="job-tags">
-          {job.cvVariant && <span className="pill">CV: {job.cvVariant}</span>}
-          <span className="pill pill-muted">{job.source}</span>
-        </div>
-        <div className="job-actions">
-          <a
-            className="btn btn-ghost"
-            href={job.url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Open posting ↗
-          </a>
-          <button
-            className="btn btn-outline"
-            onClick={handleDraft}
-            disabled={generating}
-            type="button"
-          >
-            {generating
-              ? 'Drafting…'
-              : outreach
-                ? 'Outreach'
-                : 'Draft outreach'}
-          </button>
-          <button
-            className="btn btn-ghost btn-dismiss"
-            onClick={handleDismiss}
-            disabled={dismissing}
-            type="button"
-          >
-            {dismissing ? 'Dismissing…' : 'Dismiss'}
-          </button>
-        </div>
+      <div className="jc-acts">
+        <a
+          className="jc-btn"
+          href={job.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Open posting ↗
+        </a>
+        <button
+          className="jc-btn jc-btn-go"
+          onClick={handleDraft}
+          disabled={generating}
+          type="button"
+        >
+          {generating ? 'Drafting…' : outreach ? 'Outreach' : 'Draft outreach'}
+        </button>
+        <button
+          className="jc-btn jc-btn-quiet"
+          onClick={handleDismiss}
+          disabled={dismissing}
+          type="button"
+        >
+          {dismissing ? 'Dismissing…' : 'Dismiss'}
+        </button>
       </div>
 
-      {error && <div className="banner banner-error banner-tight">{error}</div>}
+      {error && (
+        <div className="jc-err-slot">
+          <ErrorLine message={error} />
+        </div>
+      )}
 
       {panelOpen && (
-        <div className="outreach">
+        <section
+          className="jc-out corner-frame u-rise"
+          aria-label="Outreach draft"
+        >
           {generating && !outreach ? (
-            <p className="muted outreach-loading">Drafting outreach…</p>
+            <p className="jc-loading">
+              <span className="live-dot" aria-hidden="true" />
+              Drafting outreach…
+            </p>
           ) : outreachError && !outreach ? (
-            <div className="banner banner-error banner-tight">
-              {outreachError}
-            </div>
+            <ErrorLine message={outreachError} />
           ) : outreach ? (
             <>
-              <div className="outreach-top">
-                <span className="outreach-heading">Outreach</span>
+              <div className="jc-out-head">
+                <span className="sec-index">02</span>
+                <span className="sec-rule" />
+                <span className="sec-cmd">$ outreach --draft</span>
                 {outreach.cvVariant && (
-                  <span className="pill">CV to send: {outreach.cvVariant}</span>
+                  <span className="jc-chip">
+                    <b>CV</b>
+                    {outreach.cvVariant}
+                  </span>
                 )}
-                <span className="grow" />
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => runOutreach(true)}
-                  disabled={generating}
-                  type="button"
-                >
-                  {generating ? 'Regenerating…' : 'Regenerate'}
-                </button>
+                <span className="jc-out-right">
+                  {generatedAt && (
+                    <span className="jc-out-time">{generatedAt}</span>
+                  )}
+                  <button
+                    className="jc-btn"
+                    onClick={() => runOutreach(true)}
+                    disabled={generating}
+                    type="button"
+                  >
+                    {generating ? 'Regenerating…' : 'Regenerate'}
+                  </button>
+                </span>
               </div>
 
-              {outreachError && (
-                <div className="banner banner-error banner-tight">
-                  {outreachError}
-                </div>
-              )}
+              {outreachError && <ErrorLine message={outreachError} />}
 
-              <div className="outreach-field">
-                <div className="outreach-field-head">
-                  <span className="outreach-label">Referral message</span>
-                  <CopyButton text={referral} />
+              <div className="jc-draft">
+                <div className="jc-draft-head">
+                  <span className="jc-draft-idx" aria-hidden="true">
+                    01
+                  </span>
+                  <label
+                    className="jc-draft-cap"
+                    htmlFor={`referral-${uid}`}
+                  >
+                    Referral message
+                  </label>
+                  <span className="jc-draft-count">{referral.length} ch</span>
+                  <CopyButton text={referral} label="referral message" />
                 </div>
                 <textarea
-                  className="textarea outreach-textarea"
+                  id={`referral-${uid}`}
+                  className="jc-draft-body"
                   value={referral}
                   onChange={(e) => setReferral(e.target.value)}
                   rows={5}
                 />
               </div>
 
-              <div className="outreach-field">
-                <div className="outreach-field-head">
-                  <span className="outreach-label">Application note</span>
-                  <CopyButton text={note} />
+              <div className="jc-draft">
+                <div className="jc-draft-head">
+                  <span className="jc-draft-idx" aria-hidden="true">
+                    02
+                  </span>
+                  <label className="jc-draft-cap" htmlFor={`note-${uid}`}>
+                    Application note
+                  </label>
+                  <span className="jc-draft-count">{note.length} ch</span>
+                  <CopyButton text={note} label="application note" />
                 </div>
                 <textarea
-                  className="textarea outreach-textarea"
+                  id={`note-${uid}`}
+                  className="jc-draft-body"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={5}
@@ -320,19 +436,33 @@ export default function JobCard({
               </div>
 
               {outreach.targets.length > 0 && (
-                <div className="outreach-field">
-                  <span className="outreach-label">Who to contact</span>
-                  <ul className="outreach-targets">
+                <div className="jc-draft">
+                  <div className="jc-draft-head">
+                    <span className="jc-draft-idx" aria-hidden="true">
+                      03
+                    </span>
+                    <span className="jc-draft-cap" id={`targets-${uid}`}>
+                      Who to contact
+                    </span>
+                    <span className="jc-draft-count">
+                      {outreach.targets.length}
+                    </span>
+                  </div>
+                  <ul className="jc-tg" aria-labelledby={`targets-${uid}`}>
                     {outreach.targets.map((t, i) => (
-                      <li className="outreach-target" key={`${t.searchUrl}-${i}`}>
-                        <span className="outreach-target-title">{t.title}</span>
+                      <li className="jc-tg-row" key={`${t.searchUrl}-${i}`}>
+                        <span className="jc-tg-i" aria-hidden="true">
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <span className="jc-tg-t">{t.title}</span>
                         <a
-                          className="btn btn-ghost btn-sm"
+                          className="jc-tg-go"
                           href={t.searchUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          aria-label={`Find ${t.title} on LinkedIn`}
                         >
-                          Find on LinkedIn ↗
+                          LinkedIn ↗
                         </a>
                       </li>
                     ))}
@@ -341,7 +471,7 @@ export default function JobCard({
               )}
             </>
           ) : null}
-        </div>
+        </section>
       )}
     </article>
   )

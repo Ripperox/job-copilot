@@ -1,0 +1,850 @@
+/* =============================================================================
+   Job Copilot — profile / settings console
+   Owns: ProfileView, KeySettings.
+
+   IDEA
+   This page is not a form wizard, it is an operator panel for one machine.
+   So it deliberately refuses the "stack of identical rounded cards" shape:
+
+     01 resume   → a framed document with a filename bar and live counters.
+                   The heaviest object on the page, because it is the only
+                   input the scorer actually reads.
+     02 match    → a register table. No card at all: hairline rows, a fixed
+                   micro-label gutter on the left, the control on the right,
+                   parsed tokens echoed back underneath.
+     03 key      → a panel split into head / ledger / form / footnote, so the
+                   trust story (validated → encrypted → never shown again) is
+                   visible structure rather than a paragraph of reassurance.
+     04 danger   → not a card either. A red hairline rule down the left edge,
+                   which brightens and floods once the action is armed.
+
+   Every value is a token from system.css. Corners are square throughout —
+   the reference terminal has no rounded surfaces; only status pills are round.
+   --faint is decorative only (the section index); anything a user has to read
+   sits at --muted or lighter so it clears 4.5:1 on --panel.
+   ============================================================================= */
+
+.pf {
+  font-family: var(--font-mono);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 2.9rem;
+  padding-bottom: 3.5rem;
+}
+
+.pf .sec-index {
+  color: var(--faint);
+}
+
+/* Commands read as commands, not as SHOUTING. Overrides the system default
+   uppercase on .sec-cmd for this page only. */
+.pf .sec-cmd {
+  text-transform: none;
+  letter-spacing: 0.12em;
+}
+
+.pf .sec {
+  margin-bottom: 0.85rem;
+}
+
+.pf .sec-sub {
+  margin-bottom: 1.15rem;
+}
+
+.pf .sec-sub strong {
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* -----------------------------------------------------------------------------
+   Masthead — the instrument readout. Derived entirely from what is on screen.
+   -------------------------------------------------------------------------- */
+
+.pf-masthead {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.pf-masthead-id {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.pf-masthead-id::before {
+  content: '';
+  width: 3px;
+  height: 12px;
+  background: var(--accent);
+  flex: none;
+}
+
+.pf-readout {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.4rem;
+}
+
+.pf-readout-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.pf-readout-key {
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-readout-val {
+  font-size: 11.5px;
+  line-height: 1;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-lede {
+  margin: 0.75rem 0 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+/* -----------------------------------------------------------------------------
+   Boot / loading line
+   -------------------------------------------------------------------------- */
+
+.pf-boot {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 2rem 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.pf-boot-cmd {
+  color: var(--accent);
+}
+
+.pf-caret {
+  display: inline-block;
+  width: 7px;
+  height: 13px;
+  background: var(--accent);
+  animation: pf-blink 1.05s steps(1, end) infinite;
+}
+
+@keyframes pf-blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* -----------------------------------------------------------------------------
+   Alert — a framed log line, not a rounded toast.
+   -------------------------------------------------------------------------- */
+
+.pf-alert {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  margin: 0 0 1.1rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--red-bg);
+  border: 1px solid color-mix(in srgb, var(--red) 30%, transparent);
+  border-left-width: 2px;
+  border-left-color: var(--red);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.pf-alert-tag {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+
+/* -----------------------------------------------------------------------------
+   01 — Résumé document
+   -------------------------------------------------------------------------- */
+
+.pf-doc {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  transition: border-color var(--base) var(--ease);
+}
+
+/* Accent corner brackets: reserved for the one object that matters most. */
+.pf-doc.corner-frame::before,
+.pf-doc.corner-frame::after {
+  width: 9px;
+  height: 9px;
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.pf-doc:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.pf-doc-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0.85rem;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.pf-doc-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  cursor: text;
+}
+
+.pf-doc-name::before {
+  content: '';
+  width: 3px;
+  height: 11px;
+  background: var(--accent);
+  flex: none;
+}
+
+.pf-doc-meta {
+  margin-left: auto;
+  display: flex;
+  gap: 1.1rem;
+}
+
+.pf-doc-meta-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-doc-meta-val {
+  font-size: 11.5px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-doc-area {
+  display: block;
+  width: 100%;
+  min-height: 19rem;
+  padding: 1rem 1.1rem 1.2rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.75;
+  resize: vertical;
+}
+
+.pf-doc-area::placeholder {
+  color: var(--muted);
+}
+
+.pf-doc-area:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -4px;
+}
+
+.pf-doc-foot {
+  padding: 0.6rem 0.85rem;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* -----------------------------------------------------------------------------
+   02 — Register table. Label gutter left, control right, hairlines between.
+   -------------------------------------------------------------------------- */
+
+.pf-reg {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.pf-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 12.5rem minmax(0, 1fr);
+  gap: 1.5rem;
+  padding: 1.05rem 0.1rem 1.05rem 1rem;
+  transition: background var(--fast) var(--ease);
+}
+
+.pf-row + .pf-row {
+  border-top: 1px solid var(--line-soft);
+}
+
+/* The addressed register lights up on its left edge. */
+.pf-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.pf-row:focus-within::before {
+  opacity: 1;
+}
+
+.pf-row:focus-within {
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.pf-rowkey {
+  min-width: 0;
+}
+
+.pf-key {
+  display: block;
+  padding-top: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  transition: color var(--fast) var(--ease);
+}
+
+.pf-row:focus-within .pf-key {
+  color: var(--accent);
+}
+
+.pf-note {
+  margin: 0.5rem 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.pf-rowval {
+  min-width: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Controls
+   -------------------------------------------------------------------------- */
+
+.pf-input {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.4;
+  transition:
+    border-color var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease),
+    background var(--fast) var(--ease);
+}
+
+.pf-input::placeholder {
+  color: var(--muted);
+  letter-spacing: 0;
+}
+
+.pf-input:hover:not(:focus) {
+  border-color: var(--line-strong);
+}
+
+.pf-input:focus {
+  outline: none;
+  background: var(--bg);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* Number fields: kill the browser spinner, add a unit affix instead. */
+.pf-num {
+  position: relative;
+  display: block;
+  width: 10rem;
+  max-width: 100%;
+}
+
+.pf-num .pf-input {
+  padding-right: 3.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-num .pf-input::-webkit-outer-spin-button,
+.pf-num .pf-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.pf-num .pf-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.pf-unit {
+  position: absolute;
+  top: 50%;
+  right: 0.65rem;
+  transform: translateY(-50%);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* Parsed CSV echoed back, so the comma syntax has visible consequences. */
+.pf-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.55rem;
+}
+
+.pf-token {
+  padding: 0.16rem 0.42rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-dim);
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-tokens-empty {
+  margin: 0.55rem 0 0;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* -----------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+
+.pf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.62rem 1.05rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease),
+    background var(--fast) var(--ease),
+    box-shadow var(--base) var(--ease);
+}
+
+.pf-btn:hover:not(:disabled) {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+.pf-btn:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.pf-btn-go {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.pf-btn-go:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent-hover);
+  box-shadow: var(--glow);
+}
+
+.pf-btn-red {
+  border-color: color-mix(in srgb, var(--red) 42%, transparent);
+  color: var(--red);
+}
+
+.pf-btn-red:hover:not(:disabled) {
+  border-color: var(--red);
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.pf-btn-red-armed {
+  background: var(--red-bg);
+}
+
+/* Unsetting the key is reversible — it stays neutral until you reach for it,
+   so the only permanently red control on the page is account deletion. */
+.pf-btn-unset:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--red) 55%, transparent);
+  color: var(--red);
+}
+
+/* -----------------------------------------------------------------------------
+   Commit bar
+   -------------------------------------------------------------------------- */
+
+.pf-commit {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem 1rem;
+  flex-wrap: wrap;
+  padding-top: 1.05rem;
+}
+
+.pf-commit-note {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: 46ch;
+}
+
+.pf-commit-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.pf-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* -----------------------------------------------------------------------------
+   03 — Key panel
+   -------------------------------------------------------------------------- */
+
+.pf-keypanel {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.pf-kp-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 0.9rem;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.pf-kp-headkey {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-st-on  { --st: var(--accent); --st-bg: var(--accent-dim); }
+.pf-st-off { --st: var(--amber);  --st-bg: var(--amber-bg); }
+
+.pf-kp-head .pf-saved {
+  margin-left: auto;
+}
+
+.pf-mask {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.pf-providers {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pf-prov-lead {
+  margin-right: 0.2rem;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-prov {
+  padding: 0.16rem 0.4rem;
+  border: 1px solid var(--line-soft);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-prov-on {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* The trust story as structure: three terms, three consequences. */
+.pf-led {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: baseline;
+  padding: 0.6rem 0.9rem;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.pf-led + .pf-led {
+  border-top: 1px solid var(--line-soft);
+}
+
+.pf-led-term {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.pf-led-term::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  background: var(--accent);
+  flex: none;
+}
+
+.pf-led-keep .pf-led-term::before {
+  background: var(--faint);
+}
+
+.pf-kp-note {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.pf-keyform {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.pf-keyform .pf-key {
+  flex: none;
+  padding-top: 0;
+  margin-right: 0.35rem;
+}
+
+.pf-keyinput {
+  flex: 1 1 17rem;
+  min-width: 0;
+  letter-spacing: 0.16em;
+}
+
+.pf-foot {
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  border-top: 1px solid var(--line-soft);
+  background: var(--panel-2);
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.pf-link {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  transition: border-color var(--fast) var(--ease);
+}
+
+.pf-link:hover {
+  border-bottom-color: var(--accent);
+}
+
+/* -----------------------------------------------------------------------------
+   04 — Danger. A red rule down the edge, not a red box.
+   -------------------------------------------------------------------------- */
+
+.pf-sec-danger .sec-cmd {
+  color: var(--red);
+}
+
+.pf-danger {
+  border: 1px solid color-mix(in srgb, var(--red) 18%, var(--line));
+  border-left: 2px solid color-mix(in srgb, var(--red) 50%, transparent);
+  background: var(--panel-2);
+  transition:
+    background var(--base) var(--ease),
+    border-color var(--base) var(--ease);
+}
+
+.pf-danger-armed {
+  border-left-color: var(--red);
+  background: var(--red-bg);
+}
+
+/* Same ledger device as the key panel, one hue over. */
+.pf-danger .pf-led-term::before {
+  background: var(--red);
+}
+
+.pf-danger .pf-led-keep .pf-led-term::before {
+  background: var(--faint);
+}
+
+.pf-danger-act {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.9rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.pf-danger-arm {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--red);
+}
+
+.pf-danger-arm-cmd {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  flex: none;
+}
+
+/* -----------------------------------------------------------------------------
+   Narrow — the gutter collapses, everything stays legible at 360px.
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 680px) {
+  .pf {
+    gap: 2.25rem;
+  }
+
+  .pf-readout {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .pf-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.6rem;
+    padding: 0.95rem 0.1rem 1rem 0.85rem;
+  }
+
+  .pf-key {
+    padding-top: 0;
+  }
+
+  .pf-note {
+    margin-top: 0.35rem;
+  }
+
+  .pf-led {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.3rem;
+  }
+
+  .pf-doc-meta {
+    margin-left: 0;
+    gap: 0.9rem;
+  }
+
+  .pf-providers {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .pf-commit-actions {
+    margin-left: 0;
+  }
+
+  .pf-doc-area {
+    min-height: 15rem;
+    padding: 0.85rem 0.85rem 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-caret {
+    animation: none;
+  }
+}

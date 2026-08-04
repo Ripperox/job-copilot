@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JobStatus, ScoredJob } from '../api'
 import { JOB_STATUSES, UnauthorizedError, fetchJobs, getJobs, getSources, rescoreJobs } from '../api'
 import JobCard from './JobCard'
+import '../styles/dashboard.css'
 
 const SCORE_OPTIONS = [0, 50, 60, 70, 80]
 
@@ -14,6 +15,15 @@ const STATUS_LABELS: Record<JobStatus, string> = {
 }
 
 type StatusFilter = 'all' | JobStatus
+
+// The source key the backend uses for company career pages — the differentiated
+// supply, so it gets the accent marker in the source strip.
+const CAREER_PAGES = 'scraped'
+
+function sourceLabelFor(name: string): string {
+  if (name === '') return 'all'
+  return name === CAREER_PAGES ? 'career-pages' : name
+}
 
 export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => void }) {
   const [minScore, setMinScore] = useState(50)
@@ -92,6 +102,11 @@ export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => v
     [jobs, statusFilter],
   )
 
+  // Telemetry only — derived from state already on screen, no extra requests.
+  const inPlay = counts.outreach + counts.applied + counts.interview
+  const srcLabel = sourceLabelFor(sourceFilter)
+  const busy = fetching || rescoring
+
   async function handleFetch() {
     setFetching(true)
     setError(null)
@@ -129,18 +144,30 @@ export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => v
   }
 
   return (
-    <div className="stack">
-      <div className="toolbar">
+    <div className="dsh">
+      {/* ---- 01 · command deck ------------------------------------------- */}
+      <div className="dsh-sechead">
+        <span className="dsh-secidx">01</span>
+        <span className="dsh-secrule" />
+        <span className="dsh-seccmd">$ fetch --score</span>
+      </div>
+
+      <div className="dsh-deck corner-frame">
         <button
-          className="btn btn-primary"
+          type="button"
+          className="dsh-run"
           onClick={handleFetch}
           disabled={fetching || rescoring}
         >
+          <span className="dsh-run-glyph" aria-hidden="true">
+            ▸
+          </span>
           {fetching ? 'Fetching & scoring…' : 'Fetch & score jobs'}
         </button>
 
         <button
-          className="btn"
+          type="button"
+          className="dsh-btn"
           onClick={handleRescore}
           disabled={fetching || rescoring || jobs.length === 0}
           title="Re-score all fetched jobs against your current profile (e.g. after adding an API key)"
@@ -148,107 +175,184 @@ export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => v
           {rescoring ? 'Re-scoring…' : 'Re-score'}
         </button>
 
-        <label className="filter">
-          <span>Min score</span>
-          <select
-            className="input input-select"
-            value={minScore}
-            onChange={(e) => setMinScore(Number(e.target.value))}
-          >
-            {SCORE_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s === 0 ? 'All' : `${s}+`}
-              </option>
-            ))}
-          </select>
+        {busy && (
+          <span className="dsh-busy">
+            <span className="live-dot" aria-hidden="true" />
+            running
+          </span>
+        )}
+
+        <label className="dsh-field">
+          <span className="dsh-field-label">Min score</span>
+          <span className="dsh-field-ctl">
+            <select
+              className="dsh-select"
+              value={minScore}
+              onChange={(e) => setMinScore(Number(e.target.value))}
+            >
+              {SCORE_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s === 0 ? 'All' : `${s}+`}
+                </option>
+              ))}
+            </select>
+          </span>
         </label>
       </div>
 
-      {sourceCounts.length > 1 && (
-        <div className="source-tabs" role="tablist" aria-label="Filter by source">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={sourceFilter === ''}
-            className={`source-tab${sourceFilter === '' ? ' source-tab-active' : ''}`}
-            onClick={() => setSourceFilter('')}
-          >
-            All sources
-          </button>
-          {sourceCounts.map((s) => (
-            <button
-              key={s.name}
-              type="button"
-              role="tab"
-              aria-selected={sourceFilter === s.name}
-              className={`source-tab${sourceFilter === s.name ? ' source-tab-active' : ''}${
-                s.name === 'scraped' ? ' source-tab-scraped' : ''
-              }`}
-              onClick={() => setSourceFilter(s.name)}
-              title={s.name === 'scraped' ? 'Roles read straight off company career pages' : undefined}
-            >
-              {s.name === 'scraped' ? 'career pages' : s.name}{' '}
-              <span className="status-tab-count">{s.count}</span>
-            </button>
-          ))}
+      {toast && (
+        <div className="dsh-log dsh-log-ok" role="status">
+          <span className="dsh-log-tag">ok</span>
+          <span className="dsh-log-msg">{toast}</span>
+        </div>
+      )}
+      {error && (
+        <div className="dsh-log dsh-log-err" role="alert">
+          <span className="dsh-log-tag">err</span>
+          <span className="dsh-log-msg">{error}</span>
         </div>
       )}
 
-      {!loadingList && jobs.length > 0 && (
-        <div className="summary-bar">
-          <div className="summary-total">
-            <span className="summary-total-num">{jobs.length}</span>
-            <span className="summary-total-label">Total matches</span>
-          </div>
-          <div className="summary-chips">
-            {JOB_STATUSES.map((s) => (
-              <span key={s} className={`summary-chip status-${s}`}>
-                <span className="summary-chip-label">{STATUS_LABELS[s]}</span>
-                <span className="summary-chip-count">{counts[s]}</span>
-              </span>
-            ))}
-          </div>
+      {/* ---- 02 · the scope. The header echoes the live query. ------------ */}
+      <div className="dsh-sechead dsh-sechead-gap">
+        <span className="dsh-secidx">02</span>
+        <span className="dsh-secrule" />
+        <span className="dsh-seccmd">
+          $ jobs <span className="dsh-flag">--min</span>{' '}
+          <span className="dsh-val">{minScore === 0 ? 'any' : minScore}</span>{' '}
+          <span className="dsh-flag">--src</span>{' '}
+          <span className="dsh-val">{srcLabel}</span>{' '}
+          <span className="dsh-flag">--status</span>{' '}
+          <span className="dsh-val">{statusFilter}</span>
+        </span>
+      </div>
+
+      {(sourceCounts.length > 1 || (!loadingList && jobs.length > 0)) && (
+        <div className="dsh-scope">
+          {sourceCounts.length > 1 && (
+            <div className="dsh-row">
+              <span className="dsh-rowlabel">source</span>
+              <div className="dsh-seg" role="tablist" aria-label="Filter by source">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sourceFilter === ''}
+                  className={`dsh-seg-btn${sourceFilter === '' ? ' is-on' : ''}`}
+                  onClick={() => setSourceFilter('')}
+                >
+                  <span className="dsh-seg-mark" aria-hidden="true" />
+                  all sources
+                </button>
+                {sourceCounts.map((s) => (
+                  <button
+                    key={s.name}
+                    type="button"
+                    role="tab"
+                    aria-selected={sourceFilter === s.name}
+                    className={`dsh-seg-btn${sourceFilter === s.name ? ' is-on' : ''}${
+                      s.name === CAREER_PAGES ? ' is-key' : ''
+                    }`}
+                    onClick={() => setSourceFilter(s.name)}
+                    title={
+                      s.name === CAREER_PAGES
+                        ? 'Roles read straight off company career pages'
+                        : undefined
+                    }
+                  >
+                    <span className="dsh-seg-mark" aria-hidden="true" />
+                    {s.name === CAREER_PAGES ? 'career pages' : s.name}
+                    <span className="dsh-seg-n">{s.count}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!loadingList && jobs.length > 0 && (
+            <>
+              <div className="dsh-row dsh-tele scanlines">
+                <div className="dsh-readouts">
+                  <div className="dsh-ro dsh-ro-lead">
+                    <span className="dsh-ro-v">{jobs.length}</span>
+                    <span className="dsh-ro-k">matches</span>
+                  </div>
+                  <div className="dsh-ro">
+                    <span className="dsh-ro-k">shown</span>
+                    <span className="dsh-ro-v">{visibleJobs.length}</span>
+                  </div>
+                  <div className="dsh-ro">
+                    <span className="dsh-ro-k">in play</span>
+                    <span className="dsh-ro-v">{inPlay}</span>
+                  </div>
+                  <div className="dsh-ro">
+                    <span className="dsh-ro-k">min</span>
+                    <span className="dsh-ro-v">{minScore === 0 ? '—' : minScore}</span>
+                  </div>
+                  <div className="dsh-ro">
+                    <span className="dsh-ro-k">src</span>
+                    <span className="dsh-ro-v dsh-ro-v-txt">{srcLabel}</span>
+                  </div>
+                </div>
+
+                {/* Proportion, not numbers — the tabs below carry the counts. */}
+                <div className="dsh-mix" aria-hidden="true">
+                  {JOB_STATUSES.map((s) =>
+                    counts[s] > 0 ? (
+                      <span
+                        key={s}
+                        className={`dsh-mix-seg dsh-c-${s}`}
+                        style={{ flexGrow: counts[s] }}
+                        title={`${STATUS_LABELS[s]} ${counts[s]}`}
+                      />
+                    ) : null,
+                  )}
+                </div>
+              </div>
+
+              <div className="dsh-row">
+                <span className="dsh-rowlabel">status</span>
+                <div className="dsh-tabs" role="tablist" aria-label="Filter by status">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={statusFilter === 'all'}
+                    className={`dsh-tab dsh-c-all${statusFilter === 'all' ? ' is-on' : ''}`}
+                    onClick={() => setStatusFilter('all')}
+                  >
+                    <span className="dsh-tab-k">All</span>
+                    <span className="dsh-tab-n">{jobs.length}</span>
+                  </button>
+                  {JOB_STATUSES.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      role="tab"
+                      aria-selected={statusFilter === s}
+                      className={`dsh-tab dsh-c-${s}${statusFilter === s ? ' is-on' : ''}`}
+                      onClick={() => setStatusFilter(s)}
+                    >
+                      <span className="dsh-tab-k">{STATUS_LABELS[s]}</span>
+                      <span className="dsh-tab-n">{counts[s]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {!loadingList && jobs.length > 0 && (
-        <div className="status-tabs" role="tablist" aria-label="Filter by status">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={statusFilter === 'all'}
-            className={`status-tab${statusFilter === 'all' ? ' status-tab-active' : ''}`}
-            onClick={() => setStatusFilter('all')}
-          >
-            All <span className="status-tab-count">{jobs.length}</span>
-          </button>
-          {JOB_STATUSES.map((s) => (
-            <button
-              key={s}
-              type="button"
-              role="tab"
-              aria-selected={statusFilter === s}
-              className={`status-tab status-${s}${
-                statusFilter === s ? ' status-tab-active' : ''
-              }`}
-              onClick={() => setStatusFilter(s)}
-            >
-              {STATUS_LABELS[s]}{' '}
-              <span className="status-tab-count">{counts[s]}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {toast && <div className="banner banner-ok">{toast}</div>}
-      {error && <div className="banner banner-error">{error}</div>}
-
+      {/* ---- the stream --------------------------------------------------- */}
       {loadingList ? (
-        <p className="muted">Loading jobs…</p>
+        <div className="dsh-loading">
+          <span className="dsh-caret" aria-hidden="true" />
+          reading index…
+        </div>
       ) : jobs.length === 0 ? (
-        <div className="card empty">
-          <h3>No jobs yet</h3>
-          <p className="muted">
+        <div className="dsh-empty corner-frame">
+          <span className="dsh-empty-tag">0 rows</span>
+          <h3 className="dsh-empty-title">No jobs yet</h3>
+          <p className="dsh-empty-body">
             Head to <strong>Profile</strong>, paste your resume and preferences,
             then come back and click <strong>Fetch &amp; score jobs</strong>.
             {minScore > 0 && (
@@ -261,24 +365,36 @@ export default function Dashboard({ onUnauthorized }: { onUnauthorized?: () => v
           </p>
         </div>
       ) : visibleJobs.length === 0 ? (
-        <div className="card empty">
-          <h3>No {STATUS_LABELS[statusFilter as JobStatus]} jobs</h3>
-          <p className="muted">
+        <div className="dsh-empty corner-frame">
+          <span className="dsh-empty-tag">0 rows</span>
+          <h3 className="dsh-empty-title">
+            No {STATUS_LABELS[statusFilter as JobStatus]} jobs
+          </h3>
+          <p className="dsh-empty-body">
             None of your current matches are in this status. Switch back to{' '}
             <strong>All</strong> to see everything.
           </p>
         </div>
       ) : (
-        <div className="job-list">
-          {visibleJobs.map((job) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              onUpdated={handleUpdated}
-              onDismissed={handleDismissed}
-            />
-          ))}
-        </div>
+        <>
+          <div className="dsh-list">
+            {visibleJobs.map((job) => (
+              <JobCard
+                key={job.id}
+                job={job}
+                onUpdated={handleUpdated}
+                onDismissed={handleDismissed}
+              />
+            ))}
+          </div>
+          <div className="dsh-eof">
+            <span>eof</span>
+            <span className="dsh-eof-rule" aria-hidden="true" />
+            <span>
+              {visibleJobs.length} {visibleJobs.length === 1 ? 'row' : 'rows'}
+            </span>
+          </div>
+        </>
       )}
     </div>
   )
