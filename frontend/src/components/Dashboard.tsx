@@ -383,9 +383,9 @@ export default function Dashboard({
       <div className="dsh-empty">
         <h3 className="dsh-empty-t">No board listings yet</h3>
         <p className="dsh-empty-b">
-          Job boards are the aggregators — Adzuna, Jooble and the rest. A fetch
-          fills this up in about a minute, as long as your profile is set so
-          there is something to score against.
+          These come from company ATS boards (Greenhouse, Lever, Ashby) and
+          aggregators (Adzuna, Jooble). A fetch fills this up in about a minute,
+          as long as your profile is set so there is something to score against.
         </p>
         {minScore > 0 && (
           <p className="dsh-empty-b">
@@ -528,12 +528,12 @@ export default function Dashboard({
               <span className="dsh-dot" aria-hidden="true" />
               Career pages
             </p>
-            <h2 className="dsh-h1">Read straight off company sites</h2>
+            <h2 className="dsh-h1">Scraped off company career pages</h2>
             <p className="dsh-lede">
-              These roles came from a company’s own careers page rather than an
-              aggregator — usually days earlier, and in front of far fewer people.
-              There are only ever a handful, so read them properly instead of
-              skimming.
+              These were read page-by-page with Firecrawl from company career
+              sites that publish no API at all — so they exist nowhere else we
+              can reach. A handful arrive every few hours, not hundreds, which
+              is the point: read them properly instead of skimming.
             </p>
           </div>
         </header>
@@ -615,12 +615,14 @@ export default function Dashboard({
     <div className="dsh dsh-boards">
       <header className="dsh-head">
         <div className="dsh-head-txt">
-          <p className="dsh-eyebrow">Job boards</p>
-          <h2 className="dsh-h1">Everything the aggregators are carrying</h2>
+          <p className="dsh-eyebrow">API sources</p>
+          <h2 className="dsh-h1">Everything pulled through an API</h2>
           <p className="dsh-lede">
-            Adzuna, Jooble and the rest — the same listings everyone else is
-            looking at. Volume is the point: set a score floor, work down from the
-            top, and move on quickly.
+            Two kinds, both fetched rather than scraped. Company ATS boards —
+            Greenhouse, Lever, Ashby — which are the company’s own listings and
+            genuinely worth your time. And aggregators like Adzuna and Jooble,
+            which everyone else is reading too. Volume is the point here: set a
+            score floor, work down from the top, move quickly.
           </p>
         </div>
 

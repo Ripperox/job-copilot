@@ -15,7 +15,7 @@ type Tab = 'career-pages' | 'job-boards' | 'profile'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'career-pages', label: 'Career pages' },
-  { id: 'job-boards', label: 'Job boards' },
+  { id: 'job-boards', label: 'API sources' },
   { id: 'profile', label: 'Profile' },
 ]
 
