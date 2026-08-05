@@ -221,9 +221,13 @@ app.put('/api/profile', async (req, res) => {
 
 // Jobs are a SHARED pool, but the search queries and the scores are per-user: the
 // sources are queried using a user's roles/locations, and every result is scored
-// against that user's resume. A single in-flight lock stops a scheduled run and a
-// manual click (or two ticks) from overlapping.
-let fetching = false;
+// against that user's resume.
+//
+// The lock is therefore PER USER, not global. It was one shared boolean, which
+// meant any user's fetch — or a scheduler tick walking every account — returned
+// "a fetch is already in progress" to everybody else. Fine with one user, wrong
+// the moment a second signs up.
+const fetching = new Set<string>();
 
 interface FetchResult {
   sources: string[];
@@ -288,16 +292,17 @@ async function runFetchForUser(userId: string): Promise<FetchResult> {
 }
 
 app.post('/api/fetch', async (req, res) => {
-  if (fetching) return res.status(409).json({ error: 'A fetch is already in progress.' });
-  fetching = true;
+  const userId = req.userId!;
+  if (fetching.has(userId)) return res.status(409).json({ error: 'A fetch is already in progress.' });
+  fetching.add(userId);
   try {
-    const result = await runFetchForUser(req.userId!);
+    const result = await runFetchForUser(userId);
     res.json(result);
   } catch (e: any) {
     console.error('fetch failed:', e);
     res.status(500).json({ error: 'Failed to fetch jobs', detail: e.message });
   } finally {
-    fetching = false;
+    fetching.delete(userId);
   }
 });
 
@@ -333,6 +338,11 @@ app.get('/api/sources', requireAuth, async (_req, res) => {
   res.json({
     sources: [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
     scrapers: providerStatus(config),
+    // A provider reporting "configured" is NOT enough to say scraping is on:
+    // Jina needs no key, so it is always configured. With no URL list there is
+    // nothing to read, and the UI has to say that instead of promising a
+    // trickle of roles that can never arrive.
+    careerPageCount: config.scrapeCareerPages.length,
   });
 });
 
@@ -407,11 +417,6 @@ function startScheduler(): void {
     return;
   }
   const runScheduled = async () => {
-    if (fetching) {
-      console.log('[scheduler] previous fetch still running — skipping this tick.');
-      return;
-    }
-    fetching = true;
     try {
       const userIds = await db.usersWithProfiles();
       if (!userIds.length) {
@@ -419,17 +424,25 @@ function startScheduler(): void {
         return;
       }
       for (const userId of userIds) {
+        // Take only THIS user's lock, and skip them if they have a fetch of
+        // their own running. A slow account must not stall everyone behind it,
+        // and must never make another user's manual click return 409.
+        if (fetching.has(userId)) {
+          console.log(`[scheduler] user=${userId.slice(0, 8)} already fetching — skipping.`);
+          continue;
+        }
+        fetching.add(userId);
         try {
           const r = await runFetchForUser(userId);
           console.log(`[scheduler] user=${userId.slice(0, 8)} sources=${r.sources.join(',') || 'none'} added=${r.added} scored=${r.scored} total=${r.total}`);
         } catch (e: any) {
           console.error(`[scheduler] fetch failed for user ${userId.slice(0, 8)}:`, e.message);
+        } finally {
+          fetching.delete(userId);
         }
       }
     } catch (e: any) {
       console.error('[scheduler] tick failed:', e.message);
-    } finally {
-      fetching = false;
     }
   };
   setInterval(runScheduled, minutes * 60 * 1000);
