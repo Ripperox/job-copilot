@@ -244,7 +244,12 @@ export default function Dashboard({
   )
 
   const inPlay = counts.outreach + counts.applied + counts.interview
-  const scrapingOn = sources ? sources.scrapers.some((s) => s.configured) : true
+  // Scraping is only really "on" when a provider AND a URL list both exist.
+  // Jina needs no key so it always reports configured — checking providers
+  // alone made an unconfigured server promise roles that could never arrive.
+  const scrapingOn = sources
+    ? sources.scrapers.some((s) => s.configured) && (sources.careerPageCount ?? 0) > 0
+    : true
   const poolForView = career
     ? (sources?.sources ?? []).find((s) => s.name === CAREER_PAGES)?.count ?? 0
     : boardSources.reduce((n, s) => n + s.count, 0)
@@ -315,13 +320,9 @@ export default function Dashboard({
 
   // ---- empty states ----
 
-  const ghosts = (
-    <div className="dsh-ghosts" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-    </div>
-  )
+  // (Removed the decorative "ghost" bars that used to sit under empty states —
+  // they were visually identical to the loading skeleton, so an empty list read
+  // as a list still loading. An empty state should look settled, not pending.)
 
   function emptyPool(): ReactNode {
     if (career && !scrapingOn) {
@@ -337,7 +338,6 @@ export default function Dashboard({
             Until then the job boards dashboard is where your listings will show
             up.
           </p>
-          {ghosts}
         </div>
       )
     }
@@ -375,7 +375,6 @@ export default function Dashboard({
             Run a fetch to check now. If your profile is still empty, set that
             first: nothing can be scored without it.
           </p>
-          {ghosts}
         </div>
       )
     }

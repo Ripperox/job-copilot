@@ -204,6 +204,9 @@ export function getJobs(minScore: number, source = ''): Promise<ScoredJob[]> {
 export interface SourceInfo {
   sources: { name: string; count: number }[]
   scrapers: { name: string; configured: boolean }[]
+  /** How many career-page URLs the server is configured to read. Zero means
+   *  career-page scraping cannot produce anything, whatever the providers say. */
+  careerPageCount?: number
 }
 
 // Which job sources have jobs in the pool — drives the dashboard tabs.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { Health, User } from './api'
-import { API, getHealth, getMe, logout } from './api'
+import { API, getHealth, getMe, getSources, logout } from './api'
 import ProfileView from './components/ProfileView'
 import Dashboard from './components/Dashboard'
 import SignIn from './components/SignIn'
@@ -121,6 +121,29 @@ export default function App() {
       active = false
     }
   }, [])
+
+  // Career pages leads by design — those roles are the differentiated ones. But
+  // landing on an empty dashboard is the worst possible first screen, and that
+  // tab stays empty until the server has career-page URLs configured. So: check
+  // once, and fall back to job boards when there is genuinely nothing to show.
+  useEffect(() => {
+    if (!user) return
+    let active = true
+    getSources()
+      .then((s) => {
+        if (!active) return
+        const career = s.sources.find((x) => x.name === 'scraped')?.count ?? 0
+        const boards = s.sources.reduce(
+          (n, x) => n + (x.name === 'scraped' ? 0 : x.count),
+          0,
+        )
+        if (career === 0 && boards > 0) setTab('job-boards')
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [user])
 
   const onSignOut = useCallback(async () => {
     await logout().catch(() => undefined)
