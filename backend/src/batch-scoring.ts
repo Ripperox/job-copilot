@@ -1,6 +1,14 @@
 import { Job, Profile } from './types';
 import { config as defaultConfig, Config } from './config';
-import { llmComplete, hasLLM, llmProvider, isRateLimit, isTerminalForRun } from './llm';
+import {
+  llmComplete,
+  hasLLM,
+  isTerminalForRun,
+  terminalReason,
+  llmProviderChain,
+  configForProvider,
+  LLMProvider,
+} from './llm';
 import { ScoreResult, gateJob, heuristicScore, scoreWithLLM } from './scoring';
 
 // Batched scoring: many jobs per LLM request instead of one.
@@ -31,6 +39,10 @@ const BATCH_DESC_CHARS = 1200;
 //   groq      — token-limited (12k tokens/min), so batch small enough to fit
 //   anthropic — comfortable either way
 const BATCH_SIZE: Record<string, number> = {
+  // Cerebras has the most daily capacity but caps context near 8k tokens on the
+  // free tier, so keep each request small and just make more of them — 14,400
+  // requests/day means request count is not the scarce resource there.
+  cerebras: 8,
   gemini: 25,
   groq: 20,
   anthropic: 30,
@@ -40,6 +52,8 @@ const BATCH_SIZE: Record<string, number> = {
 // Gap between batches so a token-per-minute limit is not tripped by back-to-back
 // requests. Groq's 12k TPM is the tight one.
 const PACING_MS: Record<string, number> = {
+  // 30 requests/minute on the free tier.
+  cerebras: 2200,
   gemini: 0,
   groq: 4000,
   anthropic: 1000,
@@ -62,10 +76,67 @@ export interface BatchScoreOutcome {
 }
 
 // Once a provider rejects us for a reason that will not change during this run
-// (bad key, exhausted quota), every further call is wasted and makes it worse. A
-// run-scoped breaker stops calling and quietly heuristics the remainder.
-class RateLimitBreaker {
-  tripped = false;
+// (bad key, exhausted quota, unpaid model), every further call to THAT provider
+// is wasted. But it says nothing about the others.
+//
+// Free tiers die constantly and without warning — Groq is 100k tokens/day,
+// Gemini is 20 requests/day, Cerebras started returning 402 mid-project. So the
+// run walks a chain: retire the dead provider, carry on with the next one, and
+// only fall back to the keyword heuristic once every provider is spent.
+class ProviderChain {
+  private i = 0;
+  private budget: number;
+  readonly retired: string[] = [];
+
+  constructor(
+    private readonly order: LLMProvider[],
+    private readonly base: Config,
+    jobCount = 0,
+  ) {
+    // Hard ceiling on requests for the whole run, independent of any provider's
+    // behaviour. Splitting and per-job retries are bounded in principle, but a
+    // misclassified error has already turned 30 jobs into 106 requests once and
+    // 40 into 55 a second time. This makes that class of bug impossible rather
+    // than merely unlikely: roughly three attempts per nominal batch, plus a
+    // couple per provider for the handover, and never fewer than 12.
+    this.budget = Math.max(12, Math.ceil(jobCount / 8) * 3 + order.length * 2);
+  }
+
+  get active(): LLMProvider | null {
+    return this.order[this.i] ?? null;
+  }
+
+  /** True once every provider is retired OR the run's request budget is gone. */
+  get spent(): boolean {
+    return this.i >= this.order.length || this.budget <= 0;
+  }
+
+  /** Claim one request. Returns false when the run has spent its budget. */
+  spend(): boolean {
+    if (this.budget <= 0) return false;
+    this.budget--;
+    if (this.budget === 0) {
+      console.error('run hit its LLM request ceiling — heuristic for the remainder');
+    }
+    return true;
+  }
+
+  /** Config narrowed to the active provider, so no call can silently use another. */
+  config(): Config {
+    return configForProvider(this.base, this.active!);
+  }
+
+  /** Give up on the active provider. Returns true if another one is left. */
+  retire(e: unknown): boolean {
+    const dead = this.order[this.i];
+    this.retired.push(dead);
+    this.i++;
+    const next = this.active;
+    console.error(
+      `${dead} ${terminalReason(e)} — ${next ? `switching to ${next}` : 'no providers left, heuristic for the rest of this run'}`,
+    );
+    return !this.spent;
+  }
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -89,7 +160,7 @@ export async function scoreJobsBatched(
     rateLimited: false,
   };
   if (!jobs.length) return out;
-  const breaker = new RateLimitBreaker();
+  const chain = new ProviderChain(llmProviderChain(config), config, jobs.length);
 
   // 1. Cheap gates first — they cost nothing and typically remove most of the
   //    pool (senior titles, non-engineering roles), so the LLM only sees the
@@ -116,25 +187,31 @@ export async function scoreJobsBatched(
     return out;
   }
 
-  const provider = llmProvider(config);
-  const size = Math.max(1, BATCH_SIZE[provider] ?? 20);
-  const pace = PACING_MS[provider] ?? 1000;
-
-  for (let i = 0; i < needsLLM.length; i += size) {
-    const batch = needsLLM.slice(i, i + size);
-    if (breaker.tripped) {
-      // Quota is gone for now; stop burning calls and heuristic the remainder.
-      for (const job of batch) {
+  // Batch size and pacing are provider-shaped, and the provider can change
+  // mid-run when one is retired, so they are recomputed per batch rather than
+  // hoisted out of the loop.
+  let i = 0;
+  let batchNo = 0;
+  while (i < needsLLM.length) {
+    if (chain.spent) {
+      for (const job of needsLLM.slice(i)) {
         out.results.set(job.id, heuristicScore(job, profile));
         out.heuristic++;
       }
-      continue;
+      break;
     }
-    if (i > 0 && pace) await sleep(pace);
-    await scoreBatchWithFallbacks(batch, profile, config, out, 0, breaker);
+    const provider = chain.active!;
+    const size = Math.max(1, BATCH_SIZE[provider] ?? 20);
+    const pace = PACING_MS[provider] ?? 1000;
+    const batch = needsLLM.slice(i, i + size);
+    i += batch.length;
+    if (batchNo++ > 0 && pace) await sleep(pace);
+    await scoreBatchWithFallbacks(batch, profile, chain, out, 0);
   }
 
-  out.rateLimited = breaker.tripped;
+  // "Rate limited" now means the run ran out of providers entirely, not that
+  // the first one blinked.
+  out.rateLimited = chain.spent;
   return out;
 }
 
@@ -145,14 +222,13 @@ export async function scoreJobsBatched(
 async function scoreBatchWithFallbacks(
   batch: Job[],
   profile: Profile,
-  config: Config,
+  chain: ProviderChain,
   out: BatchScoreOutcome,
   depth: number,
-  breaker: RateLimitBreaker,
 ): Promise<void> {
   if (!batch.length) return;
 
-  if (breaker.tripped) {
+  if (chain.spent) {
     for (const job of batch) {
       out.results.set(job.id, heuristicScore(job, profile));
       out.heuristic++;
@@ -162,27 +238,37 @@ async function scoreBatchWithFallbacks(
 
   // A single job has nothing left to split; score it directly.
   if (batch.length === 1) {
-    await scoreIndividually(batch, profile, config, out, breaker);
+    await scoreIndividually(batch, profile, chain, out);
+    return;
+  }
+
+  if (!chain.spend()) {
+    for (const job of batch) {
+      out.results.set(job.id, heuristicScore(job, profile));
+      out.heuristic++;
+    }
     return;
   }
 
   let text: string;
   try {
     out.llmRequests++;
-    text = await llmComplete(batchPrompt(batch, profile), config, batchMaxTokens(batch.length));
+    text = await llmComplete(batchPrompt(batch, profile), chain.config(), batchMaxTokens(batch.length));
   } catch (e: unknown) {
     const message = String((e as Error)?.message ?? e);
 
     // A rate limit is NOT a size problem. Splitting and retrying would multiply
     // requests against a limit we have already hit — the opposite of helping.
-    // Trip the breaker and heuristic this batch and everything after it.
+    // Retire this provider and hand the SAME batch to the next one; the chain
+    // only advances, so this can recurse at most once per configured provider.
     if (isTerminalForRun(e)) {
-      breaker.tripped = true;
-      const why = isRateLimit(e) ? 'rate limited' : 'key rejected';
-      console.error(`${why} by provider — heuristic for the rest of this run (${message.slice(0, 120)})`);
-      for (const job of batch) {
-        out.results.set(job.id, heuristicScore(job, profile));
-        out.heuristic++;
+      if (chain.retire(e)) {
+        await scoreBatchWithFallbacks(batch, profile, chain, out, 0);
+      } else {
+        for (const job of batch) {
+          out.results.set(job.id, heuristicScore(job, profile));
+          out.heuristic++;
+        }
       }
       return;
     }
@@ -192,11 +278,11 @@ async function scoreBatchWithFallbacks(
     if (depth < 2) {
       console.error(`batch of ${batch.length} failed (${message.slice(0, 120)}) — splitting`);
       const mid = Math.ceil(batch.length / 2);
-      await scoreBatchWithFallbacks(batch.slice(0, mid), profile, config, out, depth + 1, breaker);
-      await scoreBatchWithFallbacks(batch.slice(mid), profile, config, out, depth + 1, breaker);
+      await scoreBatchWithFallbacks(batch.slice(0, mid), profile, chain, out, depth + 1);
+      await scoreBatchWithFallbacks(batch.slice(mid), profile, chain, out, depth + 1);
     } else {
       console.error(`batch of ${batch.length} failed (${message.slice(0, 120)}) — scoring individually`);
-      await scoreIndividually(batch, profile, config, out, breaker);
+      await scoreIndividually(batch, profile, chain, out);
     }
     return;
   }
@@ -216,7 +302,7 @@ async function scoreBatchWithFallbacks(
 
   if (missing.length) {
     console.error(`batch response omitted ${missing.length}/${batch.length} jobs — retrying those individually`);
-    await scoreIndividually(missing, profile, config, out, breaker);
+    await scoreIndividually(missing, profile, chain, out);
   }
 }
 
@@ -225,29 +311,37 @@ async function scoreBatchWithFallbacks(
 async function scoreIndividually(
   jobs: Job[],
   profile: Profile,
-  config: Config,
+  chain: ProviderChain,
   out: BatchScoreOutcome,
-  breaker: RateLimitBreaker,
 ): Promise<void> {
   for (const job of jobs) {
-    if (breaker.tripped) {
+    if (chain.spent || !chain.spend()) {
       out.results.set(job.id, heuristicScore(job, profile));
       out.heuristic++;
       continue;
     }
     try {
       out.llmRequests++;
-      const r = await scoreWithLLMOrThrow(job, profile, config);
+      const r = await scoreWithLLMOrThrow(job, profile, chain.config());
       out.results.set(job.id, r);
       out.individual++;
     } catch (e) {
       // Surface the rate limit rather than swallowing it inside scoreJob, so the
-      // breaker can stop the remaining jobs from each making their own doomed call.
+      // chain can move on instead of every remaining job making its own doomed
+      // call to a provider that has already said no.
       if (isTerminalForRun(e)) {
-        breaker.tripped = true;
-        console.error(
-          `${isRateLimit(e) ? 'rate limited' : 'key rejected'} during individual scoring — heuristic for the rest of this run`,
-        );
+        if (chain.retire(e) && chain.spend()) {
+          // Same job, next provider. The chain only advances, so this terminates.
+          out.llmRequests++;
+          try {
+            const r = await scoreWithLLMOrThrow(job, profile, chain.config());
+            out.results.set(job.id, r);
+            out.individual++;
+            continue;
+          } catch {
+            // fall through to the heuristic below
+          }
+        }
       }
       out.results.set(job.id, heuristicScore(job, profile));
       out.heuristic++;

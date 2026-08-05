@@ -2,7 +2,14 @@ import * as crypto from 'crypto';
 import { Job, Profile } from '../types';
 import { Config } from '../config';
 import { scrapePage } from '../scrapers';
-import { llmComplete, hasLLM, llmProvider, isTerminalForRun } from '../llm';
+import {
+  llmComplete,
+  hasLLM,
+  isTerminalForRun,
+  terminalReason,
+  llmProviderChain,
+  configForProvider,
+} from '../llm';
 
 // Company career pages as a job source.
 //
@@ -107,6 +114,9 @@ export async function fetchScrapedJobs(profile: Profile, config: Config): Promis
 //            ceiling; batching there would only cause 413s
 //   anthropic — comfortable either way
 const PAGES_PER_REQUEST: Record<string, number> = {
+  // One page is ~3k tokens, which with the prompt already fills most of
+  // Cerebras' ~8k free-tier context window.
+  cerebras: 1,
   gemini: 4,
   groq: 1,
   anthropic: 3,
@@ -120,21 +130,38 @@ async function extractFromPages(
 ): Promise<Job[]> {
   if (!pages.length || !hasLLM(config)) return [];
 
-  const provider = llmProvider(config);
-  const per = Math.max(1, PAGES_PER_REQUEST[provider] ?? 1);
+  // Same failover discipline as the scorer: one dead free tier must not cost us
+  // the whole scrape when another key is configured. Walk the chain, and only
+  // give up on extraction once every provider has said no.
+  const order = llmProviderChain(config);
+  let p = 0;
   const jobs: Job[] = [];
   let requests = 0;
+  const used: string[] = [];
 
-  for (let i = 0; i < pages.length; i += per) {
+  for (let i = 0; i < pages.length; ) {
+    if (p >= order.length) {
+      console.error('[scraped] every LLM provider is spent — stopping extraction for this run');
+      break;
+    }
+    const provider = order[p];
+    if (!used.includes(provider)) used.push(provider);
+    const cfg = configForProvider(config, provider);
+    const per = Math.max(1, PAGES_PER_REQUEST[provider] ?? 1);
     const group = pages.slice(i, i + per);
+
     try {
       requests++;
-      const found = await extractGroup(group, config);
+      const found = await extractGroup(group, cfg);
       for (const [url, rows] of found) jobs.push(...toJobs(rows, url, profile));
+      i += group.length;
     } catch (e: unknown) {
       if (isTerminalForRun(e)) {
-        console.error(`[scraped] provider rejected (${String((e as Error).message).slice(0, 100)}) — stopping extraction for this run`);
-        break;
+        console.error(
+          `[scraped] ${provider} ${terminalReason(e)} — ${order[p + 1] ? `switching to ${order[p + 1]}` : 'no providers left'}`,
+        );
+        p++;
+        continue; // same pages, next provider
       }
       // A group that fails for any other reason falls back to one page at a
       // time, so one awkward page cannot cost us the whole group.
@@ -142,18 +169,22 @@ async function extractFromPages(
       for (const page of group) {
         try {
           requests++;
-          const one = await extractGroup([page], config);
+          const one = await extractGroup([page], cfg);
           for (const [url, rows] of one) jobs.push(...toJobs(rows, url, profile));
         } catch (inner) {
-          if (isTerminalForRun(inner)) break;
+          if (isTerminalForRun(inner)) {
+            p++;
+            break;
+          }
           console.error(`[scraped] ${page.url}: ${String((inner as Error)?.message ?? inner).slice(0, 120)}`);
         }
       }
+      i += group.length;
     }
   }
 
   console.error(
-    `[scraped] ${jobs.length} roles from ${pages.length} pages in ${requests} LLM request(s) via ${provider}`,
+    `[scraped] ${jobs.length} roles from ${pages.length} pages in ${requests} LLM request(s) via ${used.join(' → ') || 'none'}`,
   );
   return jobs;
 }

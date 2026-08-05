@@ -32,7 +32,9 @@ const job = (id: string, over: Partial<Job> = {}): Job => ({
 
 // A config with no provider keys at all — forces the heuristic path so these
 // tests never make a network call.
-const NO_LLM = { ...config, geminiApiKey: '', groqApiKey: '', anthropicApiKey: '' };
+// Every provider must be blanked, or a real key from .env leaks in and the
+// test starts making live API calls.
+const NO_LLM = { ...config, cerebrasApiKey: '', geminiApiKey: '', groqApiKey: '', anthropicApiKey: '' };
 
 describe('parseBatchResponse', () => {
   it('parses a clean array', () => {
@@ -147,15 +149,37 @@ describe('scoreJobsBatched', () => {
     // A rate limit is not a size problem. Splitting and retrying would fire more
     // calls at a limit we have already hit; the breaker must stop after one.
     const jobs = Array.from({ length: 60 }, (_, i) => job(`r:${i}`));
-    const fakeGroq = { ...config, groqApiKey: 'gsk_definitely_invalid_key_for_tests', geminiApiKey: '', anthropicApiKey: '' };
+    const rejecting = { ...NO_LLM, groqApiKey: 'gsk_definitely_invalid_key_for_tests' };
 
-    const out = await scoreJobsBatched(jobs, profile, fakeGroq);
+    const out = await scoreJobsBatched(jobs, profile, rejecting);
 
     // Every job still gets a result...
     expect(out.results.size).toBe(60);
     expect(out.gated + out.batched + out.individual + out.heuristic).toBe(60);
     // ...and we never fired anywhere near one request per job.
     expect(out.llmRequests).toBeLessThanOrEqual(3);
+  }, 60000);
+
+  it('moves to the NEXT provider instead of giving up on the first rejection', async () => {
+    // The whole point of the chain: a dead free tier must not sink the run when
+    // another key is sitting right there. Both keys here are invalid, so the
+    // run still ends on the heuristic — but it must have TRIED both.
+    const jobs = Array.from({ length: 40 }, (_, i) => job(`f:${i}`));
+    const twoBadKeys = {
+      ...NO_LLM,
+      groqApiKey: 'gsk_definitely_invalid_key_for_tests',
+      geminiApiKey: 'AIzaDefinitelyInvalidKeyForTests',
+    };
+
+    const out = await scoreJobsBatched(jobs, profile, twoBadKeys);
+
+    expect(out.results.size).toBe(40);
+    // Tried groq, was rejected, tried gemini — so strictly more than one call.
+    expect(out.llmRequests).toBeGreaterThanOrEqual(2);
+    // ...but still no fan-out: one attempt per provider, not per batch or job.
+    expect(out.llmRequests).toBeLessThanOrEqual(4);
+    // Every provider is spent, so the run reports itself as rate limited.
+    expect(out.rateLimited).toBe(true);
   }, 60000);
 
   it('accounts for every job across the outcome counters', async () => {
