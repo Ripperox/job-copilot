@@ -60,7 +60,10 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+        # "-latest" alias, deliberately: gemini-2.5-flash was retired under us
+        # and started answering 404 "no longer available". Pinning an exact
+        # version means the deploy silently dies the day Google rotates it.
+        value: gemini-flash-latest
 
       # How often the shared job pool refreshes. 60 = hourly.
       - key: FETCH_INTERVAL_MINUTES
