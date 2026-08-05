@@ -26,10 +26,17 @@ export function isRateLimit(e: unknown): boolean {
 const AUTH_MESSAGE =
   /api[ _]?key not valid|api_key_invalid|invalid api[ _]?key|unauthorized|permission denied|payment required|billing/i;
 
+// A missing or inaccessible MODEL is terminal for that provider too. Cerebras
+// answers a bad model name with 404 "Model does not exist or you do not have
+// access to it" (observed 2026-08-05), and 404 is not otherwise terminal — so
+// the caller kept retrying page by page, ten doomed requests for four pages.
+const MODEL_MESSAGE = /model does not exist|model_not_found|no such model|unknown model|does not exist or you do not have access/i;
+
 export function isTerminalForRun(e: unknown): boolean {
   if (!(e instanceof LLMError)) return false;
   if (e.status === 401 || e.status === 402 || e.status === 403 || e.status === 429) return true;
-  return e.status === 400 && AUTH_MESSAGE.test(e.message);
+  if (e.status === 400 && AUTH_MESSAGE.test(e.message)) return true;
+  return e.status === 404 && MODEL_MESSAGE.test(e.message);
 }
 
 // Why a provider was retired, for the run log.

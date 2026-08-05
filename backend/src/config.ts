@@ -51,9 +51,16 @@ export const config = {
   // Firecrawl's free tier is 1000 credits/month and one page costs one credit,
   // so 24 pages on the hourly job schedule would be ~17,000 credits/month and
   // die in two days. Once a day is ~720/month, which fits with headroom.
-  scrapeIntervalHours: Number(process.env.SCRAPE_INTERVAL_HOURS ?? 24),
+  // 3h, not 24h: paired with a small page window below, the whole list is
+  // covered roughly every 18 hours in short runs that actually finish.
+  scrapeIntervalHours: Number(process.env.SCRAPE_INTERVAL_HOURS ?? 3),
   // Hard ceiling per run, so a long target list cannot spike usage.
-  scrapeMaxPagesPerRun: Number(process.env.SCRAPE_MAX_PAGES_PER_RUN ?? 30),
+  // 4, not 30. With 24 targets the old default read the ENTIRE list every run
+  // — 465s measured — so the rotation this was meant to enable never happened,
+  // and a run that long does not survive a free-tier host. 4 pages is ~60-90s.
+  // Budget check: 4 pages x 8 runs/day = 32 Firecrawl credits/day, ~960/month,
+  // just inside the 1,000/month free allowance.
+  scrapeMaxPagesPerRun: Number(process.env.SCRAPE_MAX_PAGES_PER_RUN ?? 4),
 
   // ---- Auth ----
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',

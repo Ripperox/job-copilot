@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import { Job, Profile } from '../types';
 import { Config } from '../config';
 import { scrapePage } from '../scrapers';
+import { db } from '../db';
 import {
   llmComplete,
   hasLLM,
@@ -70,25 +71,39 @@ export async function fetchScrapedJobs(profile: Profile, config: Config): Promis
 
   console.error(`[scraped] ${config.scrapeCareerPages.length} career page(s) configured`);
 
+  // State lives in Postgres, not memory. The host restarts frequently and an
+  // in-memory cursor reset to 0 every time, so the same first pages were read
+  // over and over and the tail of the list was never reached.
+  const state = await db.getScrapeState().catch(() => ({ cursor: 0, lastScrape: 0 }));
+  lastScrapeAt = state.lastScrape;
+
   const dueAt = lastScrapeAt + config.scrapeIntervalHours * 60 * 60 * 1000;
   if (lastScrapeAt && Date.now() < dueAt) {
     const mins = Math.round((dueAt - Date.now()) / 60000);
     console.error(`[scraped] skipping — next career-page scrape due in ${mins} min`);
     return [];
   }
-  lastScrapeAt = Date.now();
 
   // Read a rotating WINDOW of the target list rather than all of it.
   //
-  // The binding constraint is not Firecrawl (1 credit/page) but the LLM that
-  // parses each page: roughly 3k tokens each, against a free tier that must also
-  // pay for scoring the whole job pool. Reading everything daily starves scoring.
-  // Rotating covers every page every few days while staying inside the budget.
+  // The binding constraint is not Firecrawl (1 credit/page) but wall-clock: each
+  // page costs ~7s of pacing plus fetch plus LLM parsing, so reading all 24 in
+  // one run took 465s measured. A run that long does not survive a free-tier
+  // host that restarts on idle, and because nothing is written until the very
+  // end, an interrupted run loses everything it gathered. Small windows finish
+  // and commit; the cursor below carries the rotation across runs.
   const all = config.scrapeCareerPages;
   const size = Math.max(1, Math.min(config.scrapeMaxPagesPerRun, all.length));
-  const start = scrapeCursor % all.length;
+  const start = state.cursor % all.length;
   const targets = Array.from({ length: size }, (_, i) => all[(start + i) % all.length]);
-  scrapeCursor = (start + size) % all.length;
+
+  // Advance the cursor and stamp the run BEFORE doing the work, so a crash
+  // mid-run moves on to the next window instead of retrying the same one
+  // forever and never reaching the rest of the list.
+  lastScrapeAt = Date.now();
+  await db.setScrapeState((start + size) % all.length, lastScrapeAt).catch((e) => {
+    console.error('[scraped] could not persist scrape state:', e.message);
+  });
 
   if (size < all.length) {
     console.error(

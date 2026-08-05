@@ -308,6 +308,31 @@ export const db = {
     await query('DELETE FROM user_keys WHERE user_id = $1', [userId]);
   },
 
+  // ---- career-page scrape state ----
+  // Persisted rather than held in memory: the host restarts often, and an
+  // in-memory cursor reset the rotation to page 0 every time, so the tail of the
+  // target list was never read at all.
+
+  async getScrapeState(): Promise<{ cursor: number; lastScrape: number }> {
+    const { rows } = await query<{ cursor: number; last_scrape: Date | null }>(
+      'SELECT cursor, last_scrape FROM scrape_state WHERE id = 1',
+    );
+    if (!rows.length) return { cursor: 0, lastScrape: 0 };
+    return {
+      cursor: Number(rows[0].cursor) || 0,
+      lastScrape: rows[0].last_scrape ? new Date(rows[0].last_scrape).getTime() : 0,
+    };
+  },
+
+  async setScrapeState(cursor: number, lastScrape: number): Promise<void> {
+    await query(
+      `INSERT INTO scrape_state (id, cursor, last_scrape)
+       VALUES (1, $1, to_timestamp($2 / 1000.0))
+       ON CONFLICT (id) DO UPDATE SET cursor = EXCLUDED.cursor, last_scrape = EXCLUDED.last_scrape`,
+      [cursor, lastScrape],
+    );
+  },
+
   // ---- the cached one-job demo ----
 
   async setDemoScore(jobId: string, score: number, reason: string, cvVariant: string): Promise<void> {

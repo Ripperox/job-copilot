@@ -86,6 +86,18 @@ CREATE TABLE IF NOT EXISTS demo_score (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Career-page scraping state. This lived in module memory, which meant every
+-- restart reset the rotation cursor to zero: the scraper re-read the same first
+-- pages forever and never reached the rest of the list. Render's free tier
+-- restarts often, so "in memory" effectively meant "never rotates".
+CREATE TABLE IF NOT EXISTS scrape_state (
+  id          INTEGER PRIMARY KEY,
+  cursor      INTEGER NOT NULL DEFAULT 0,
+  last_scrape TIMESTAMPTZ,
+  CONSTRAINT scrape_state_single_row CHECK (id = 1)
+);
+INSERT INTO scrape_state (id, cursor) VALUES (1, 0) ON CONFLICT (id) DO NOTHING;
+
 CREATE INDEX IF NOT EXISTS scores_user_score_idx    ON scores (user_id, score DESC);
 CREATE INDEX IF NOT EXISTS job_meta_user_status_idx ON job_meta (user_id, status);
 CREATE INDEX IF NOT EXISTS jobs_created_at_idx      ON jobs (created_at DESC);

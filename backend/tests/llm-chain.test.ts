@@ -61,4 +61,22 @@ describe('isTerminalForRun', () => {
   it('402 is terminal — Cerebras returns it for every model without billing', () => {
     expect(isTerminalForRun(new LLMError('Payment required', 402))).toBe(true);
   });
+
+  it('a 400 that means "bad key" is terminal — Gemini uses 400, not 401', () => {
+    expect(
+      isTerminalForRun(new LLMError('Gemini 400: API key not valid. Please pass a valid API key.', 400)),
+    ).toBe(true);
+    // ...but a plain 400 is a size/shape problem and SHOULD be retried smaller.
+    expect(isTerminalForRun(new LLMError('Gemini 400: request too large', 400))).toBe(false);
+  });
+
+  it('a 404 naming a missing model is terminal, so it cannot fan out per item', () => {
+    expect(
+      isTerminalForRun(
+        new LLMError('Cerebras 404: {"message":"Model does not exist or you do not have access to it."}', 404),
+      ),
+    ).toBe(true);
+    // A bare 404 is not assumed terminal.
+    expect(isTerminalForRun(new LLMError('404: not found', 404))).toBe(false);
+  });
 });

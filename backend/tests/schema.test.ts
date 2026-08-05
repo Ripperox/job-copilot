@@ -13,8 +13,25 @@ describe('schema', () => {
     );
     const names = rows.map((r) => r.table_name).sort();
     expect(names).toEqual(
-      ['demo_score', 'job_meta', 'jobs', 'outreach', 'profiles', 'scores', 'user_keys', 'users'].sort(),
+      ['demo_score', 'job_meta', 'jobs', 'outreach', 'profiles', 'scores', 'scrape_state', 'user_keys', 'users'].sort(),
     );
+  });
+
+  it('seeds exactly one scrape_state row, and keeps it single', async () => {
+    const { rows } = await pool.query<{ id: number; cursor: number }>('SELECT id, cursor FROM scrape_state');
+    expect(rows.length).toBe(1);
+    expect(Number(rows[0].id)).toBe(1);
+    // The CHECK constraint is what stops a second row appearing and the cursor
+    // silently forking between two writers.
+    await expect(pool.query('INSERT INTO scrape_state (id, cursor) VALUES (2, 0)')).rejects.toThrow();
+  });
+
+  it('round-trips the scrape cursor so rotation survives a restart', async () => {
+    const { db } = await import('../src/db');
+    await db.setScrapeState(7, 1754400000000);
+    const s = await db.getScrapeState();
+    expect(s.cursor).toBe(7);
+    expect(s.lastScrape).toBe(1754400000000);
   });
 
   it('is idempotent — applying twice does not throw', async () => {
