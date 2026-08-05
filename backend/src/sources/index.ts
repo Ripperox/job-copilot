@@ -12,119 +12,82 @@ import { fetchScrapedJobs } from './scraped';
 
 // Aggregates all configured job sources. Falls back to the mock set so the app
 // is usable with zero API keys. New sources (Greenhouse, Lever, ...) plug in here.
+// Aggregates all configured job sources. Falls back to the mock set so the app
+// is usable with zero API keys. New sources plug into TASKS below.
+//
+// Sources run CONCURRENTLY. They were awaited one after another, so a run took
+// the SUM of every provider's latency — and the slowest, career-page scraping,
+// can be a minute on its own while the ATS boards answer in under a second.
+// They are independent network calls, so the wall clock should be the slowest
+// one, not the total.
+//
+// allSettled, not all: one provider being rate-limited or down must never fail
+// the others. Each task already catches internally; this is the belt to that
+// bracer, and it keeps the partial results either way.
 export async function gatherJobs(profile: Profile, config: Config): Promise<{ jobs: Job[]; sources: string[] }> {
+  type Task = { label: string; run: () => Promise<Job[]> };
+  const tasks: Task[] = [];
+
+  if (config.adzunaAppId && config.adzunaAppKey) {
+    tasks.push({ label: 'adzuna', run: () => fetchAdzunaJobs(profile, config) });
+  }
+  if (config.greenhouseBoards.length > 0) {
+    tasks.push({ label: 'greenhouse', run: () => fetchGreenhouseJobs(config.greenhouseBoards) });
+  }
+  if (config.leverBoards.length > 0) {
+    tasks.push({ label: 'lever', run: () => fetchLeverJobs(config.leverBoards) });
+  }
+  if (config.ashbyBoards.length > 0) {
+    tasks.push({ label: 'ashby', run: () => fetchAshbyJobs(config.ashbyBoards) });
+  }
+  if (config.jsearchApiKey) {
+    tasks.push({ label: 'jsearch', run: () => fetchJSearchJobs(profile, config) });
+  }
+  if (config.joobleApiKey) {
+    tasks.push({ label: 'jooble', run: () => fetchJoobleJobs(profile, config) });
+  }
+  if (config.activeJobsApiKey) {
+    tasks.push({
+      label: 'activejobs',
+      run: () => fetchFantasticJobs(
+        { host: 'active-jobs-db.p.rapidapi.com', path: '/active-ats', label: 'activejobs', apiKey: config.activeJobsApiKey },
+        profile, config,
+      ),
+    });
+  }
+  if (config.linkedinJobsApiKey) {
+    tasks.push({
+      label: 'linkedin',
+      run: () => fetchFantasticJobs(
+        { host: 'linkedin-job-search-api.p.rapidapi.com', path: '/active-jb', label: 'linkedin', apiKey: config.linkedinJobsApiKey },
+        profile, config,
+      ),
+    });
+  }
+  // Company career pages. Unlike the aggregators above, these carry roles that
+  // are earlier and far less competed — often before they syndicate anywhere.
+  if (config.scrapeCareerPages.length > 0) {
+    tasks.push({ label: 'scraped', run: () => fetchScrapedJobs(profile, config) });
+  }
+
+  const started = Date.now();
+  const settled = await Promise.allSettled(tasks.map((t) => t.run()));
+
   const jobs: Job[] = [];
   const sources: string[] = [];
   let gotReal = false;
 
-  if (config.adzunaAppId && config.adzunaAppKey) {
-    try {
-      const a = await fetchAdzunaJobs(profile, config);
-      jobs.push(...a);
-      sources.push(`adzuna(${a.length})`);
+  settled.forEach((outcome, i) => {
+    const { label } = tasks[i];
+    if (outcome.status === 'fulfilled') {
+      jobs.push(...outcome.value);
+      sources.push(`${label}(${outcome.value.length})`);
       gotReal = true;
-    } catch (e) {
-      console.error('Adzuna source failed:', e);
+    } else {
+      console.error(`${label} source failed:`, String(outcome.reason?.message ?? outcome.reason).slice(0, 200));
     }
-  }
-
-  if (config.greenhouseBoards.length > 0) {
-    try {
-      const g = await fetchGreenhouseJobs(config.greenhouseBoards);
-      jobs.push(...g);
-      sources.push(`greenhouse(${g.length})`);
-      gotReal = true;
-    } catch (e) {
-      console.error('Greenhouse source failed:', e);
-    }
-  }
-
-  if (config.leverBoards.length > 0) {
-    try {
-      const l = await fetchLeverJobs(config.leverBoards);
-      jobs.push(...l);
-      sources.push(`lever(${l.length})`);
-      gotReal = true;
-    } catch (e) {
-      console.error('Lever source failed:', e);
-    }
-  }
-
-  if (config.ashbyBoards.length > 0) {
-    try {
-      const a = await fetchAshbyJobs(config.ashbyBoards);
-      jobs.push(...a);
-      sources.push(`ashby(${a.length})`);
-      gotReal = true;
-    } catch (e) {
-      console.error('Ashby source failed:', e);
-    }
-  }
-
-  if (config.jsearchApiKey) {
-    try {
-      const j = await fetchJSearchJobs(profile, config);
-      jobs.push(...j);
-      sources.push(`jsearch(${j.length})`);
-      gotReal = true;
-    } catch (e) {
-      console.error('JSearch source failed:', e);
-    }
-  }
-
-  if (config.joobleApiKey) {
-    try {
-      const j = await fetchJoobleJobs(profile, config);
-      jobs.push(...j);
-      sources.push(`jooble(${j.length})`);
-      gotReal = true;
-    } catch (e) {
-      console.error('Jooble source failed:', e);
-    }
-  }
-
-  if (config.activeJobsApiKey) {
-    try {
-      const a = await fetchFantasticJobs(
-        { host: 'active-jobs-db.p.rapidapi.com', path: '/active-ats', label: 'activejobs', apiKey: config.activeJobsApiKey },
-        profile,
-        config,
-      );
-      jobs.push(...a);
-      sources.push(`activejobs(${a.length})`);
-      gotReal = true;
-    } catch (e) {
-      console.error('Active Jobs DB source failed:', e);
-    }
-  }
-
-  if (config.linkedinJobsApiKey) {
-    try {
-      const l = await fetchFantasticJobs(
-        { host: 'linkedin-job-search-api.p.rapidapi.com', path: '/active-jb', label: 'linkedin', apiKey: config.linkedinJobsApiKey },
-        profile,
-        config,
-      );
-      jobs.push(...l);
-      sources.push(`linkedin(${l.length})`);
-      gotReal = true;
-    } catch (e) {
-      console.error('LinkedIn Jobs source failed:', e);
-    }
-  }
-
-  // Company career pages. Unlike the aggregators above, these carry roles that
-  // are earlier and far less competed — often before they syndicate anywhere.
-  if (config.scrapeCareerPages.length > 0) {
-    try {
-      const s = await fetchScrapedJobs(profile, config);
-      jobs.push(...s);
-      sources.push(`scraped(${s.length})`);
-      gotReal = true;
-    } catch (e) {
-      console.error('Scraped career pages failed:', e);
-    }
-  }
+  });
+  console.log(`[sources] ${tasks.length} sources in parallel, ${jobs.length} jobs, ${Date.now() - started}ms`);
 
   if (!gotReal || jobs.length === 0) {
     const m = fetchMockJobs();

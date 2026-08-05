@@ -153,6 +153,67 @@ export const db = {
     return rows[0].inserted;
   },
 
+  /**
+   * Upsert many jobs in ONE statement.
+   *
+   * The caller used to loop `upsertJob` per job. Measured against the Neon
+   * pooler a round trip is ~209ms, so the 443-job ATS import spent ~92 seconds
+   * doing nothing but waiting. Batched, the same import is a couple of
+   * statements. Chunked because Postgres caps a statement at 65535 parameters
+   * and each job binds 10.
+   *
+   * Returns how many rows were newly inserted (xmax = 0), same as before.
+   */
+  async upsertJobs(jobs: Job[]): Promise<number> {
+    if (!jobs.length) return 0;
+    const COLS = 10;
+    const CHUNK = 500; // 5,000 params — comfortably under the 65,535 ceiling
+    let inserted = 0;
+
+    for (let i = 0; i < jobs.length; i += CHUNK) {
+      const chunk = jobs.slice(i, i + CHUNK);
+      const values: unknown[] = [];
+      const tuples = chunk.map((job, n) => {
+        values.push(job.id, job.source, job.title, job.company, job.location,
+                    job.description, job.url, job.salary, job.postedAt, job.createdAt);
+        const base = n * COLS;
+        return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10})`;
+      });
+      const { rows } = await query<{ inserted: boolean }>(
+        `INSERT INTO jobs (id, source, title, company, location, description, url, salary, posted_at, created_at)
+         VALUES ${tuples.join(',')}
+         ON CONFLICT (id) DO UPDATE SET
+           source = EXCLUDED.source, title = EXCLUDED.title, company = EXCLUDED.company,
+           location = EXCLUDED.location, description = EXCLUDED.description, url = EXCLUDED.url,
+           salary = EXCLUDED.salary, posted_at = EXCLUDED.posted_at
+         RETURNING (xmax = 0) AS inserted`,
+        values,
+      );
+      inserted += rows.filter((r) => r.inserted).length;
+    }
+    return inserted;
+  },
+
+  /** Count only. Loading every row to call .length cost 4s at 1,724 jobs. */
+  async countJobs(): Promise<number> {
+    const { rows } = await query<{ n: string }>('SELECT count(*)::int AS n FROM jobs');
+    return Number(rows[0].n);
+  },
+
+  /** Per-source counts in SQL. Counting in JS over allJobs() cost 4s; this is ~200ms. */
+  async countBySource(): Promise<{ name: string; count: number }[]> {
+    const { rows } = await query<{ source: string; n: string }>(
+      'SELECT source, count(*)::int AS n FROM jobs GROUP BY source ORDER BY n DESC',
+    );
+    return rows.map((r) => ({ name: r.source, count: Number(r.n) }));
+  },
+
+  /** One job by id. allJobs().find() pulled the whole table to find one row. */
+  async getJob(id: string): Promise<Job | undefined> {
+    const { rows } = await query<JobRow>('SELECT * FROM jobs WHERE id = $1', [id]);
+    return rows.length ? toJob(rows[0]) : undefined;
+  },
+
   async allJobs(): Promise<Job[]> {
     const { rows } = await query<JobRow>('SELECT * FROM jobs');
     return rows.map(toJob);

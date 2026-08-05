@@ -88,7 +88,35 @@ export interface RescoreResult {
   rescored: number
 }
 
+// In-flight request de-duplication.
+//
+// Mounting the app fired four requests where two would do: the landing-tab
+// check asks for jobs, then the dashboard it lands on asks for the same jobs
+// again, and both ask for sources. Identical concurrent GETs now share one
+// response instead of racing each other to the same rows — which matters a
+// lot here because /jobs is a join over the whole pool.
+//
+// Deliberately only in-flight, with no TTL: a stale cache after a fetch or a
+// status change would be a correctness bug, and this collapses the duplicates
+// without pretending to know when data went out of date.
+const inFlight = new Map<string, Promise<unknown>>()
+
+function dedupe<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const existing = inFlight.get(key)
+  if (existing) return existing as Promise<T>
+  const p = run().finally(() => inFlight.delete(key))
+  inFlight.set(key, p)
+  return p as Promise<T>
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Only GETs are shared; a POST or PATCH must always be sent.
+  const method = (init?.method ?? 'GET').toUpperCase()
+  if (method === 'GET') return dedupe(path, () => rawRequest<T>(path, init))
+  return rawRequest<T>(path, init)
+}
+
+async function rawRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     // Sends and accepts the session cookie on cross-origin dev requests.

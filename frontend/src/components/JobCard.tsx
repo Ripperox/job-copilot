@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { memo, useEffect, useId, useState } from 'react'
 import type { JobStatus, Outreach, ScoredJob } from '../api'
 import { JOB_STATUSES, generateOutreach, getOutreach, patchJob } from '../api'
 import { formatSalary } from '../lib/format'
@@ -75,7 +75,7 @@ function ErrorLine({ message }: { message: string }) {
   )
 }
 
-export default function JobCard({
+function JobCard({
   job,
   onUpdated,
   onDismissed,
@@ -456,3 +456,10 @@ export default function JobCard({
     </article>
   )
 }
+
+// Memoised: the dashboard re-renders on every filter change, status update and
+// poll, and re-rendering 300+ cards to change one of them is the difference
+// between the list feeling instant and feeling stuck. Props are stable —
+// handlers are useCallback'd in Dashboard — so the default shallow compare is
+// enough.
+export default memo(JobCard)

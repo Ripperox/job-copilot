@@ -278,8 +278,7 @@ async function runFetchForUser(userId: string): Promise<FetchResult> {
   // Job-source calls run on the OPERATOR's keys — the pool is shared, so it is
   // fetched once for everyone rather than once per user.
   const gathered = await gatherJobs(profile, config);
-  let added = 0;
-  for (const job of gathered.jobs) if (await db.upsertJob(job)) added++;
+  const added = await db.upsertJobs(gathered.jobs);
 
   // Scoring runs on THIS user's own LLM key. Without one it degrades to the
   // keyword heuristic rather than spending the operator's quota.
@@ -295,7 +294,7 @@ async function runFetchForUser(userId: string): Promise<FetchResult> {
   }
   const scored = await scoreAndStore(userId, toScore, profile, llm);
 
-  return { sources: gathered.sources, added, scored, total: (await db.allJobs()).length, usedLLM: hasKey };
+  return { sources: gathered.sources, added, scored, total: await db.countJobs(), usedLLM: hasKey };
 }
 
 app.post('/api/fetch', async (req, res) => {
@@ -340,10 +339,8 @@ app.get('/api/jobs', async (req, res) => {
 // Which job sources currently have jobs in the pool, and how many. Drives the
 // dashboard's source tabs.
 app.get('/api/sources', requireAuth, async (_req, res) => {
-  const counts = new Map<string, number>();
-  for (const job of await db.allJobs()) counts.set(job.source, (counts.get(job.source) ?? 0) + 1);
   res.json({
-    sources: [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
+    sources: await db.countBySource(),
     scrapers: providerStatus(config),
     // A provider reporting "configured" is NOT enough to say scraping is on:
     // Jina needs no key, so it is always configured. With no URL list there is
@@ -378,7 +375,7 @@ app.get('/api/jobs/:id/outreach', async (req, res) => {
 // Generate (or regenerate) the outreach draft for a job: a referral message,
 // an application note, and who to contact. Cached until ?regenerate=true.
 app.post('/api/jobs/:id/outreach', async (req, res) => {
-  const job = (await db.allJobs()).find((j) => j.id === req.params.id);
+  const job = await db.getJob(req.params.id);
   if (!job) return res.status(404).json({ error: 'not found' });
   const profile = await db.getProfile(req.userId!);
   if (!profile) return res.status(400).json({ error: 'Set your profile first.' });
