@@ -48,8 +48,27 @@ export function lastScrapeTime(): number {
   return lastScrapeAt;
 }
 
+// Warn once per process rather than on every fetch, so the log says why the
+// feature is dead without drowning the scheduler output.
+let warnedNoTargets = false;
+
 export async function fetchScrapedJobs(profile: Profile, config: Config): Promise<Job[]> {
-  if (!config.scrapeCareerPages.length) return [];
+  if (!config.scrapeCareerPages.length) {
+    // This used to return silently, which made an unset variable and a failed
+    // deploy look identical in the logs — the feature produced nothing for days
+    // and said nothing about it. Never fail silently on a disabled feature.
+    if (!warnedNoTargets) {
+      console.error(
+        '[scraped] SCRAPE_CAREER_PAGES is empty — career-page reading is OFF. ' +
+          'Set it to a comma-separated list of career-page URLs; the scrapers ' +
+          'themselves are fine (Jina needs no key), there is simply nothing to read.',
+      );
+      warnedNoTargets = true;
+    }
+    return [];
+  }
+
+  console.error(`[scraped] ${config.scrapeCareerPages.length} career page(s) configured`);
 
   const dueAt = lastScrapeAt + config.scrapeIntervalHours * 60 * 60 * 1000;
   if (lastScrapeAt && Date.now() < dueAt) {
