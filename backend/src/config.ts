@@ -1,6 +1,15 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 
+// Comma-separated env list with a shipped default.
+function list(v: string | undefined, fallback: string): string[] {
+  // Note the emptiness check rather than ??: an env var present but blank
+  // (GREENHOUSE_BOARDS= in .env) is not nullish, so ?? kept the empty string
+  // and silently disabled the source.
+  const raw = v && v.trim() ? v : fallback;
+  return raw.split(',').map((x) => x.trim()).filter(Boolean);
+}
+
 export const config = {
   port: Number(process.env.PORT) || 4500,
   // How often the backend auto-fetches from all sources, in minutes. 0 disables
@@ -34,8 +43,26 @@ export const config = {
   // Jooble aggregator (strong India coverage)
   joobleApiKey: process.env.JOOBLE_API_KEY || '',
   // comma-separated Greenhouse board tokens, e.g. "stripe,airbnb"
-  greenhouseBoards: (process.env.GREENHOUSE_BOARDS || '').split(',').map((s) => s.trim()).filter(Boolean),
-  leverBoards: (process.env.LEVER_BOARDS || '').split(',').map((s) => s.trim()).filter(Boolean),
+  // Public ATS boards — free, unmetered, no key. These carry the load now that
+  // JSearch, Active Jobs and LinkedIn are all monthly-quota exhausted.
+  //
+  // Defaults are shipped in code rather than left to env vars because the env
+  // route has repeatedly failed us: a blueprint sync will not retrofit vars
+  // onto an existing service, and hand-pasting ate a hyphen twice. Every token
+  // below was verified live on 2026-08-05. Set the env var to override.
+  //
+  // Curated for one candidate profile: companies that hire in India or hire
+  // genuinely globally-remote. Postings are location-filtered again in
+  // ats-filter.ts, because these boards are large and mostly US-only.
+  greenhouseBoards: list(
+    process.env.GREENHOUSE_BOARDS,
+    'phonepe,groww,druva,postman,turing,mongodb,databricks,rubrik,adyen,bitgo,gitlab,mercury,vercel',
+  ),
+  leverBoards: list(process.env.LEVER_BOARDS, 'meesho,porter,zeta,mindtickle,cred'),
+  ashbyBoards: list(
+    process.env.ASHBY_BOARDS,
+    'supabase,linear,railway,neon,sentilink,atlan,navi,incident,zapier,ramp,plaid,alchemy,anyscale',
+  ),
 
   // ---- Web scraping (company career pages) ----
   // Tried in this order; the chain falls through when one is out of quota.
@@ -45,8 +72,15 @@ export const config = {
   exaApiKey: process.env.EXA_API_KEY || '',
   jinaApiKey: process.env.JINA_API_KEY || '',
   // Comma-separated career-page URLs to scrape for openings.
-  scrapeCareerPages: (process.env.SCRAPE_CAREER_PAGES || '')
-    .split(',').map((s) => s.trim()).filter(Boolean),
+  // Measured 2026-08-06: of the original 24 targets, only 8 returned any job
+  // signal at all — the rest are JS-rendered boards that hand a scraper nothing
+  // but navigation. PhonePe and Meesho were dropped too, not for lack of
+  // content but because their Greenhouse/Lever boards cover them structurally
+  // and for free, while scraping costs LLM tokens per page.
+  //
+  // Six pages at 4 per run means full coverage every ~4.5 hours instead of 18,
+  // and no credits burned on pages that cannot yield.
+  scrapeCareerPages: list(process.env.SCRAPE_CAREER_PAGES, 'https://www.stackbinary.io/careers,https://www.ycombinator.com/jobs,https://unicoconnect.com/careers,https://www.cashfree.com/careers/,https://upstox.com/careers,https://snapmint.com/careers'),
   // Career pages are scraped FAR less often than the aggregators are fetched.
   // Firecrawl's free tier is 1000 credits/month and one page costs one credit,
   // so 24 pages on the hourly job schedule would be ~17,000 credits/month and

@@ -4,6 +4,7 @@ import { fetchMockJobs } from './mock';
 import { fetchAdzunaJobs } from './adzuna';
 import { fetchGreenhouseJobs } from './greenhouse';
 import { fetchLeverJobs } from './lever';
+import { fetchAshbyJobs } from './ashby';
 import { fetchJSearchJobs } from './jsearch';
 import { fetchJoobleJobs } from './jooble';
 import { fetchFantasticJobs } from './fantastic';
@@ -46,6 +47,17 @@ export async function gatherJobs(profile: Profile, config: Config): Promise<{ jo
       gotReal = true;
     } catch (e) {
       console.error('Lever source failed:', e);
+    }
+  }
+
+  if (config.ashbyBoards.length > 0) {
+    try {
+      const a = await fetchAshbyJobs(config.ashbyBoards);
+      jobs.push(...a);
+      sources.push(`ashby(${a.length})`);
+      gotReal = true;
+    } catch (e) {
+      console.error('Ashby source failed:', e);
     }
   }
 

@@ -1,4 +1,5 @@
 import { Job } from '../types';
+import { filterOpenToIndia, companyFromToken } from './ats-filter';
 
 // Greenhouse public job-board API (no key required).
 // Docs: https://developers.greenhouse.io/job-board.html
@@ -31,7 +32,10 @@ async function fetchBoard(token: string): Promise<Job[]> {
       id: `greenhouse:${token}:${job.id}`,
       source: 'greenhouse',
       title: job.title || '',
-      company: job.departments?.[0]?.name || token,
+      // NOT departments[0].name — that is the team, so every GitLab role
+      // came through as a company called "Engineering". The board API does
+      // not carry a company name, so derive it from the token.
+      company: companyFromToken(token),
       location: job.location?.name || '',
       description: job.content ? stripHtml(String(job.content)) : '',
       url: job.absolute_url || '',
@@ -53,5 +57,5 @@ export async function fetchGreenhouseJobs(boards: string[]): Promise<Job[]> {
       }
     }),
   );
-  return results.flat();
+  return filterOpenToIndia(results.flat());
 }

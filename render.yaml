@@ -87,4 +87,4 @@ services:
       - key: SCRAPE_MAX_PAGES_PER_RUN
         value: "4"
       - key: SCRAPE_CAREER_PAGES
-        value: "https://zerodha.com/careers/,https://groww.in/careers,https://upstox.com/careers,https://www.angelone.in/careers,https://careers.smallcase.com,https://raisefinancial.freshteam.com/jobs,https://razorpay.com/jobs/jobs-all/,https://juspay.io/careers,https://www.cashfree.com/careers/,https://www.phonepe.com/careers/job-openings/,https://careers.cred.club,https://jupiter.money/careers/,https://www.sliceit.com/careers,https://setu.co/careers,https://www.dream11.com/careers,https://careers.hotstar.com,https://careers.swiggy.com/,https://www.zomato.com/careers,https://www.meesho.io/jobs,https://zeptonow.com/careers,https://unicoconnect.com/careers,https://www.stackbinary.io/careers,https://snapmint.com/careers,https://www.ycombinator.com/jobs"
+        value: "https://www.stackbinary.io/careers,https://www.ycombinator.com/jobs,https://unicoconnect.com/careers,https://www.cashfree.com/careers/,https://upstox.com/careers,https://snapmint.com/careers"

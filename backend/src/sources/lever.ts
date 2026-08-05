@@ -1,4 +1,5 @@
 import { Job } from '../types';
+import { filterOpenToIndia } from './ats-filter';
 
 // Lever public postings API (no key required).
 // Endpoint: https://api.lever.co/v0/postings/{slug}?mode=json
@@ -54,5 +55,5 @@ export async function fetchLeverJobs(companies: string[]): Promise<Job[]> {
       }
     }),
   );
-  return results.flat();
+  return filterOpenToIndia(results.flat());
 }
