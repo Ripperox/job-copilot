@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { JobStatus, ScoredJob, SourceInfo } from '../api'
 import { JOB_STATUSES, UnauthorizedError, fetchJobs, getJobs, getSources, rescoreJobs } from '../api'
 import JobCard from './JobCard'
@@ -14,6 +15,12 @@ import '../styles/dashboard.css'
 // presentation is not. Career pages are a short, high-value reading list; job
 // boards are a long queue to triage. They are laid out, worded and paced
 // differently on purpose, and neither is a filter tab on the other.
+//
+// What changed in v3: both are now built around the list rather than around a
+// page header. The title block is one compact strip, the filters live in a bar
+// that sticks under the app bar so you can re-filter from 6,000px down the
+// queue without scrolling back, and the marketing-shaped side panel that used
+// to take a third of the career dashboard is a footnote you can open.
 
 const SCORE_OPTIONS = [0, 50, 60, 70, 80]
 
@@ -47,12 +54,6 @@ function hostOf(url: string): string | null {
   }
 }
 
-function freshLabel(days: number): string {
-  if (days <= 0) return 'Posted today'
-  if (days === 1) return 'Posted yesterday'
-  return `Posted ${days} days ago`
-}
-
 export default function Dashboard({
   view,
   onUnauthorized,
@@ -62,6 +63,7 @@ export default function Dashboard({
 }) {
   const career = view === 'career-pages'
   const uid = useId()
+  const still = useReducedMotion()
 
   const [minScore, setMinScore] = useState(50)
   const [jobs, setJobs] = useState<ScoredJob[]>([])
@@ -275,7 +277,7 @@ export default function Dashboard({
 
   const listId = `${uid}-list`
 
-  // ---- controls (same two filters in both views, laid out differently) ----
+  // ---- controls (same two filters in both views, in one bar) ----
 
   const statusChoices = career
     ? JOB_STATUSES.filter((s) => counts[s] > 0 || s === statusFilter)
@@ -285,7 +287,7 @@ export default function Dashboard({
     <>
       <div className="dsh-ctl">
         <span className="dsh-ctl-k" id={`${uid}-score`}>
-          Minimum score
+          Score
         </span>
         <div className="dsh-scores" role="group" aria-labelledby={`${uid}-score`}>
           {SCORE_OPTIONS.map((s) => (
@@ -302,7 +304,7 @@ export default function Dashboard({
         </div>
       </div>
 
-      <div className="dsh-ctl">
+      <div className="dsh-ctl dsh-ctl-status">
         <span className="dsh-ctl-k" id={`${uid}-status`}>
           Status
         </span>
@@ -325,9 +327,10 @@ export default function Dashboard({
               role="tab"
               aria-selected={statusFilter === s}
               aria-controls={listId}
-              className={`dsh-tab dsh-c-${s}`}
+              className={`dsh-tab dsh-c-${s} st-${s}`}
               onClick={() => setStatusFilter(s)}
             >
+              <i className="u-dot" aria-hidden="true" />
               {STATUS_LABELS[s]}
               <span className="dsh-tab-n">{counts[s]}</span>
             </button>
@@ -338,10 +341,11 @@ export default function Dashboard({
   )
 
   // ---- empty states ----
-
-  // (Removed the decorative "ghost" bars that used to sit under empty states —
-  // they were visually identical to the loading skeleton, so an empty list read
-  // as a list still loading. An empty state should look settled, not pending.)
+  //
+  // An empty list is a real answer, so it gets a real page: a headline you can
+  // read from across the room, two lines of why, and the one button that
+  // resolves it. No ghost rows — those made an empty list look like a loading
+  // one, which is the worst thing an empty state can do.
 
   function emptyPool(): ReactNode {
     if (career && !scrapingOn) {
@@ -404,7 +408,7 @@ export default function Dashboard({
             )}
           </p>
           <div className="dsh-empty-acts">
-            <button type="button" className="dsh-btn" onClick={() => setMinScore(0)}>
+            <button type="button" className="dsh-btn dsh-btn-go" onClick={() => setMinScore(0)}>
               Show all {poolForView}
             </button>
           </div>
@@ -445,7 +449,7 @@ export default function Dashboard({
         )}
         {minScore > 0 && (
           <div className="dsh-empty-acts">
-            <button type="button" className="dsh-btn" onClick={() => setMinScore(0)}>
+            <button type="button" className="dsh-btn dsh-btn-go" onClick={() => setMinScore(0)}>
               Show every score
             </button>
           </div>
@@ -470,7 +474,7 @@ export default function Dashboard({
         <div className="dsh-empty-acts">
           <button
             type="button"
-            className="dsh-btn"
+            className="dsh-btn dsh-btn-go"
             onClick={() => setStatusFilter('all')}
           >
             Show all {jobs.length}
@@ -487,7 +491,7 @@ export default function Dashboard({
   const capped = matchTotal > jobs.length
   let listRegion: ReactNode
   if (loading) {
-    listRegion = <DashSkeleton rows={career ? 3 : 5} />
+    listRegion = <DashSkeleton rows={career ? 5 : 9} />
   } else if (loadError) {
     listRegion = (
       <div className="dsh-errslot">
@@ -500,21 +504,24 @@ export default function Dashboard({
     listRegion = emptyStatus()
   } else {
     listRegion = (
-      <ul className="dsh-list">
+      // The stagger is CSS, capped at the first dozen rows by --i. Running a
+      // JS animation over 140 memoised rows would cost more than the whole
+      // redesign saves, and nothing below the fold is worth animating anyway.
+      <ul className="dsh-list" data-stagger>
         {visibleJobs.map((job, i) => {
-          const days = daysSince(job.postedAt ?? job.createdAt)
-          const host = hostOf(job.url)
+          const host = career ? hostOf(job.url) : null
           return (
-            <li className="dsh-item" key={job.id}>
+            <li
+              className="dsh-item"
+              key={job.id}
+              style={{ '--i': Math.min(i, 11) } as CSSProperties}
+            >
               {career && (
                 <p className="dsh-item-cap">
-                  <span className="dsh-item-i">
+                  <span className="dsh-item-i u-num">
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   {host && <span className="dsh-item-host">{host}</span>}
-                  {days !== null && days <= 7 && (
-                    <span className="dsh-fresh">{freshLabel(days)}</span>
-                  )}
                 </p>
               )}
               <JobCard
@@ -530,9 +537,17 @@ export default function Dashboard({
   }
 
   const feedback = (
-    <>
+    <AnimatePresence initial={false}>
       {note && (
-        <div className="dsh-note u-rise" role="status">
+        <motion.div
+          key="note"
+          className="dsh-note"
+          role="status"
+          initial={still ? false : { opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+        >
           <span className="dsh-note-tick" aria-hidden="true">
             ✓
           </span>
@@ -540,7 +555,7 @@ export default function Dashboard({
             <p className="dsh-note-t">{note.title}</p>
             <p className="dsh-note-l">{note.line}</p>
           </div>
-          <span className="dsh-note-meta">{note.meta}</span>
+          <span className="dsh-note-meta u-num">{note.meta}</span>
           <button
             type="button"
             className="dsh-note-x"
@@ -549,16 +564,24 @@ export default function Dashboard({
           >
             ×
           </button>
-        </div>
+        </motion.div>
       )}
       {actionError && (
-        <DashError
-          info={actionError.info}
-          onRetry={actionError.retry}
-          onDismiss={() => setActionError(null)}
-        />
+        <motion.div
+          key="err"
+          initial={still ? false : { opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+        >
+          <DashError
+            info={actionError.info}
+            onRetry={actionError.retry}
+            onDismiss={() => setActionError(null)}
+          />
+        </motion.div>
       )}
-    </>
+    </AnimatePresence>
   )
 
   const runPanel = (
@@ -569,6 +592,55 @@ export default function Dashboard({
       onFetch={() => void handleFetch()}
       onRescore={() => void handleRescore()}
     />
+  )
+
+  // The count line lives in the filter bar so it travels with the controls that
+  // change it, instead of sitting 6,000px above them.
+  const countLine =
+    !loading && jobs.length > 0 ? (
+      <p className="dsh-count">
+        <span className="dsh-num">{visibleJobs.length}</span>
+        {statusFilter === 'all' ? (
+          <>
+            {' '}
+            {visibleJobs.length === 1 ? 'role' : 'roles'}
+            {minScore > 0 && (
+              <>
+                {' above '}
+                <span className="dsh-num">{minScore}</span>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            {' of '}
+            <span className="dsh-num">{jobs.length}</span> ·{' '}
+            {STATUS_LABELS[statusFilter].toLowerCase()}
+          </>
+        )}
+        {freshCount > 0 && statusFilter === 'all' && (
+          <>
+            {' · '}
+            <span className="dsh-num">{freshCount}</span> this week
+          </>
+        )}
+      </p>
+    ) : null
+
+  const controls = (
+    <section className="dsh-console" aria-label="Filters">
+      <div className="dsh-console-in">
+        {filters}
+        {countLine}
+      </div>
+      {capped && (
+        <p className="dsh-capped" role="status">
+          Showing <span className="dsh-num">{jobs.length}</span> of{' '}
+          <span className="dsh-num">{matchTotal}</span> matches — raise the score
+          floor to narrow it.
+        </p>
+      )}
+    </section>
   )
 
   // ---------------------------------------------------------------- career
@@ -583,89 +655,57 @@ export default function Dashboard({
             </p>
             <h2 className="dsh-h1">Scraped off company career pages</h2>
             <p className="dsh-lede">
-              These were read page-by-page with Firecrawl from company career
-              sites that publish no API at all — so they exist nowhere else we
-              can reach. A handful arrive every few hours, not hundreds, which
-              is the point: read them properly instead of skimming.
+              Read straight off company career sites that publish no API, so
+              they exist nowhere else we can reach. A handful every few hours,
+              not hundreds — worth reading properly.
             </p>
+          </div>
+          <div className="dsh-head-run">
+            {runPanel}
+            {phase === 'idle' && (
+              <p className="dsh-fine">
+                Career pages are only re-read every few hours, so a fetch will
+                not always change this list.
+              </p>
+            )}
           </div>
         </header>
 
-        <div className="dsh-body">
-          <aside className="dsh-rail">
-            <div className="dsh-card">
-              {runPanel}
-              <p className="dsh-fine">
-                A fetch reads every source. Career pages are only re-read every
-                few hours, so this list will not always change.
-              </p>
+        {controls}
+        {feedback}
+
+        <main className="dsh-main" id={listId}>
+          {listRegion}
+        </main>
+
+        {/* Kept, but demoted. It is a good argument for the dashboard and worth
+            reading once; it is not worth a third of the screen every morning. */}
+        <details className="dsh-note-fold">
+          <summary>Why these are worth the time</summary>
+          <dl className="dsh-why-list">
+            <div>
+              <dt>Barely contested</dt>
+              <dd>
+                Many never reach an aggregator at all. The ones that do land there
+                days later, behind hundreds of applications.
+              </dd>
             </div>
-
-            <div className="dsh-card dsh-filters">{filters}</div>
-          </aside>
-
-          <main className="dsh-main" id={listId}>
-            {feedback}
-            {!loading && jobs.length > 0 && (
-              <p className="dsh-count">
-                <span className="dsh-num">{jobs.length}</span>{' '}
-                {jobs.length === 1 ? 'role' : 'roles'} above{' '}
-                {minScore === 0 ? 'any score' : <span className="dsh-num">{minScore}</span>}
-                {freshCount > 0 && (
-                  <>
-                    {' · '}
-                    <span className="dsh-num">{freshCount}</span> posted this week
-                  </>
-                )}
-                {statusFilter !== 'all' && (
-                  <>
-                    {' · showing '}
-                    <span className="dsh-num">{visibleJobs.length}</span>{' '}
-                    {STATUS_LABELS[statusFilter].toLowerCase()}
-                  </>
-                )}
-              </p>
-            )}
-            {capped && (
-              <p className="dsh-capped" role="status">
-                Showing <span className="dsh-num">{jobs.length}</span> of{' '}
-                <span className="dsh-num">{matchTotal}</span> matches — raise the score
-                floor to narrow it.
-              </p>
-            )}
-            {listRegion}
-          </main>
-
-          {/* Last in the DOM so a phone reads controls, then roles, then this. */}
-          <aside className="dsh-aside">
-            <div className="dsh-card">
-              <h3 className="dsh-card-t">Why these are worth the time</h3>
-              <dl className="dsh-why-list">
-                <div>
-                  <dt>Barely contested</dt>
-                  <dd>
-                    Many never reach an aggregator at all. The ones that do land
-                    there days later, behind hundreds of applications.
-                  </dd>
-                </div>
-                <div>
-                  <dt>As current as it gets</dt>
-                  <dd>
-                    Read off the company’s own page, so nothing here is a stale
-                    relist from a third party.
-                  </dd>
-                </div>
-                <div>
-                  <dt>Few enough to read</dt>
-                  <dd>
-                    A handful, not hundreds. Open each one, read the verdict, and
-                    write a note you would actually send.
-                  </dd>
-                </div>
-              </dl>
+            <div>
+              <dt>As current as it gets</dt>
+              <dd>
+                Read off the company’s own page, so nothing here is a stale relist
+                from a third party.
+              </dd>
             </div>
-          </aside>
-        </div>
+            <div>
+              <dt>Few enough to read</dt>
+              <dd>
+                A handful, not hundreds. Open each one, read the verdict, and write
+                a note you would actually send.
+              </dd>
+            </div>
+          </dl>
+        </details>
       </div>
     )
   }
@@ -678,83 +718,76 @@ export default function Dashboard({
           <p className="dsh-eyebrow">API sources</p>
           <h2 className="dsh-h1">Everything pulled through an API</h2>
           <p className="dsh-lede">
-            Two kinds, both fetched rather than scraped. Company ATS boards —
-            Greenhouse, Lever, Ashby — which are the company’s own listings and
-            genuinely worth your time. And aggregators like Adzuna and Jooble,
-            which everyone else is reading too. Volume is the point here: set a
-            score floor, work down from the top, move quickly.
+            Company ATS boards — Greenhouse, Lever, Ashby — plus aggregators
+            everyone else is reading too. Volume is the point: set a floor, work
+            down from the top, move quickly.
           </p>
         </div>
 
-        <div className="dsh-readout">
-          <div className="dsh-stats">
-            <div className="dsh-stat is-lead">
-              <span className={`dsh-stat-v${loading ? ' is-wait' : ''}`}>
-                {loading ? '—' : jobs.length}
-              </span>
-              <span className="dsh-stat-k">
-                {minScore === 0 ? 'matches' : `matches at ${minScore}+`}
-              </span>
+        <div className="dsh-head-run">
+          {runPanel}
+          <div className="dsh-readout">
+            <div className="dsh-stats">
+              <div className="dsh-stat is-lead">
+                <span className={`dsh-stat-v u-num${loading ? ' is-wait' : ''}`}>
+                  {loading ? '—' : jobs.length}
+                </span>
+                <span className="dsh-stat-k">
+                  {minScore === 0 ? 'matches' : `at ${minScore}+`}
+                </span>
+              </div>
+              <div className="dsh-stat">
+                <span className={`dsh-stat-v u-num${loading ? ' is-wait' : ''}`}>
+                  {loading ? '—' : visibleJobs.length}
+                </span>
+                <span className="dsh-stat-k">showing</span>
+              </div>
+              <div className="dsh-stat">
+                <span className={`dsh-stat-v u-num${loading ? ' is-wait' : ''}`}>
+                  {loading ? '—' : inPlay}
+                </span>
+                <span className="dsh-stat-k">in play</span>
+              </div>
             </div>
-            <div className="dsh-stat">
-              <span className={`dsh-stat-v${loading ? ' is-wait' : ''}`}>
-                {loading ? '—' : visibleJobs.length}
-              </span>
-              <span className="dsh-stat-k">showing</span>
-            </div>
-            <div className="dsh-stat">
-              <span className={`dsh-stat-v${loading ? ' is-wait' : ''}`}>
-                {loading ? '—' : inPlay}
-              </span>
-              <span className="dsh-stat-k">in play</span>
-            </div>
+            {jobs.length > 0 && (
+              <div
+                className="dsh-mix"
+                aria-hidden="true"
+                title="Status mix across your matches"
+              >
+                {JOB_STATUSES.map((s) =>
+                  counts[s] > 0 ? (
+                    <span
+                      key={s}
+                      className={`dsh-mix-seg st-${s}`}
+                      style={{ flexGrow: counts[s] }}
+                    />
+                  ) : null,
+                )}
+              </div>
+            )}
           </div>
-          {jobs.length > 0 && (
-            <div
-              className="dsh-mix"
-              aria-hidden="true"
-              title="Status mix across your matches"
-            >
-              {JOB_STATUSES.map((s) =>
-                counts[s] > 0 ? (
-                  <span
-                    key={s}
-                    className={`dsh-mix-seg dsh-c-${s}`}
-                    style={{ flexGrow: counts[s] }}
-                  />
-                ) : null,
-              )}
-            </div>
-          )}
         </div>
       </header>
 
-      <section className="dsh-console" aria-label="Controls and filters">
-        <div className="dsh-console-row is-top">
-          {runPanel}
-          {boardSources.length > 0 && (
-            <p className="dsh-legend">
-              <span className="dsh-legend-k">In the pool</span>
-              {boardSources.map((s) => (
-                <span className="dsh-legend-i" key={s.name}>
-                  {s.name}
-                  <span className="dsh-legend-n">{s.count}</span>
-                </span>
-              ))}
-            </p>
-          )}
-        </div>
+      {boardSources.length > 0 && (
+        <p className="dsh-legend">
+          <span className="dsh-legend-k">In the pool</span>
+          {boardSources.map((s) => (
+            <span className="dsh-legend-i" key={s.name}>
+              {s.name}
+              <span className="dsh-legend-n u-num">{s.count}</span>
+            </span>
+          ))}
+        </p>
+      )}
 
-        <div className="dsh-console-row is-filters">{filters}</div>
-      </section>
-
+      {controls}
       {feedback}
 
-      <div className="dsh-body">
-        <main className="dsh-main" id={listId}>
-          {listRegion}
-        </main>
-      </div>
+      <main className="dsh-main" id={listId}>
+        {listRegion}
+      </main>
     </div>
   )
 }

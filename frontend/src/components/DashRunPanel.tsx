@@ -101,9 +101,8 @@ export default function DashRunPanel({
 
       {!running && (
         <p className="dsh-run-note">
-          Reads every source, then scores what’s new against your profile.{' '}
-          <strong>Takes about a minute</strong> — you can keep working while it
-          runs.
+          Reads every source, then scores what’s new.{' '}
+          <strong>About a minute</strong> — you can keep working while it runs.
         </p>
       )}
 

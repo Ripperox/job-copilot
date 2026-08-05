@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { KeyboardEvent } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
 import type { Health, User } from './api'
 import { API, getHealth, getJobs, getMe, logout } from './api'
 import ProfileView from './components/ProfileView'
@@ -13,10 +14,10 @@ import './styles/shell.css'
 // their own place in the nav rather than hiding behind a dropdown.
 type Tab = 'career-pages' | 'job-boards' | 'profile'
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'career-pages', label: 'Career pages' },
-  { id: 'job-boards', label: 'API sources' },
-  { id: 'profile', label: 'Profile' },
+const TABS: { id: Tab; label: string; short: string }[] = [
+  { id: 'career-pages', label: 'Career pages', short: 'Career' },
+  { id: 'job-boards', label: 'API sources', short: 'API' },
+  { id: 'profile', label: 'Profile', short: 'Profile' },
 ]
 
 // Messages the OAuth callback can hand back via ?auth=…
@@ -54,20 +55,27 @@ function writeSetupHidden(hidden: boolean): void {
 }
 
 // Status is deliberately understated. A working backend is the normal case and
-// should not shout; only an unreachable one gets colour and a border.
+// should not shout; only an unreachable one gets colour and a border. The short
+// form is what survives when the bar runs out of room.
 function readStatus(
   health: Health | null,
   failed: boolean,
-): { tone: 'ok' | 'warn' | 'idle' | 'down'; text: string; title: string } {
+): { tone: 'ok' | 'warn' | 'idle' | 'down'; text: string; short: string; title: string } {
   if (failed) {
     return {
       tone: 'down',
       text: 'Backend offline',
+      short: 'Offline',
       title: `Could not reach the API at ${API}. Nothing will load until it is back.`,
     }
   }
   if (!health) {
-    return { tone: 'idle', text: 'Checking…', title: 'Checking the backend.' }
+    return {
+      tone: 'idle',
+      text: 'Checking…',
+      short: 'Checking',
+      title: 'Checking the backend.',
+    }
   }
   const boards = health.adzuna
     ? 'Adzuna job board connected.'
@@ -76,12 +84,14 @@ function readStatus(
     return {
       tone: 'warn',
       text: 'Keyword scoring',
+      short: 'Keyword',
       title: `No model key in use, so jobs are scored by keyword overlap. Add a key on the Profile tab for scores with reasons. ${boards}`,
     }
   }
   return {
     tone: 'ok',
     text: `Scoring with ${LLM_LABELS[health.llm]}`,
+    short: LLM_LABELS[health.llm],
     title: `${LLM_LABELS[health.llm]} is reading each posting and explaining its score. ${boards}`,
   }
 }
@@ -96,6 +106,8 @@ export default function App() {
   const [setupHidden, setSetupHidden] = useState(readSetupHidden)
   // null until the checklist has worked out where the account stands.
   const [setupDone, setSetupDone] = useState<boolean | null>(null)
+
+  const still = useReducedMotion()
 
   // Read (and then clear) the ?auth= flag the backend redirect adds, so a failed
   // sign-in explains itself and the query string does not linger in the URL.
@@ -220,6 +232,10 @@ export default function App() {
 
   return (
     <div className="app shell-app">
+      <a className="shell-skip" href="#shell-panel">
+        Skip to the job list
+      </a>
+
       <header className="shell-bar">
         <div className="shell-bar-inner">
           <div className="shell-brand">
@@ -229,21 +245,37 @@ export default function App() {
             <span className="shell-wordmark">Job Copilot</span>
           </div>
 
+          {/* One indicator that slides between tabs, rather than three that
+              fade in and out: the movement is what tells you where you came
+              from. It is a layout animation, so it costs nothing while the tab
+              is not changing, and it is switched off entirely for anyone who
+              has asked for reduced motion. */}
           <nav className="shell-tabs" role="tablist" aria-label="Sections" onKeyDown={onTabKeys}>
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                id={`shell-tab-${t.id}`}
-                className="shell-tab"
-                role="tab"
-                aria-selected={tab === t.id}
-                aria-controls="shell-panel"
-                tabIndex={tab === t.id ? 0 : -1}
-                onClick={() => setTab(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
+            {TABS.map((t) => {
+              const on = tab === t.id
+              return (
+                <button
+                  key={t.id}
+                  id={`shell-tab-${t.id}`}
+                  className="shell-tab"
+                  role="tab"
+                  aria-selected={on}
+                  aria-controls="shell-panel"
+                  tabIndex={on ? 0 : -1}
+                  onClick={() => setTab(t.id)}
+                >
+                  {on && (
+                    <motion.span
+                      className="shell-tab-ind"
+                      aria-hidden="true"
+                      layoutId={still ? undefined : 'shell-tab-ind'}
+                      transition={{ type: 'spring', stiffness: 520, damping: 44, mass: 0.9 }}
+                    />
+                  )}
+                  <span className="shell-tab-label">{t.label}</span>
+                </button>
+              )
+            })}
           </nav>
 
           <div className="shell-right">
@@ -292,6 +324,7 @@ export default function App() {
           id="shell-panel"
           role="tabpanel"
           aria-labelledby={`shell-tab-${tab}`}
+          tabIndex={-1}
         >
           {tab === 'profile' ? (
             <ProfileView onUnauthorized={onUnauthorized} onAccountDeleted={onSignOut} />

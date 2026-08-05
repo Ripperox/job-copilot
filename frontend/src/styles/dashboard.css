@@ -1,370 +1,241 @@
 /* =============================================================================
    Job Copilot — the two dashboards
-   Built on the tokens in styles/system.css (v2). No new colours, no new fonts.
+   Every value here resolves to a token from styles/system.css.
 
-   WHAT CHANGED AND WHY
-   The previous version dressed the dashboard as a terminal: `$ jobs --min 50`
-   headers, blinking carets, `EOF ──── 42 rows`, letterspaced caps everywhere,
-   square hairline boxes. It looked robotic, it was tiring to read, and it left
-   two thirds of a 1440px screen empty. Gone.
+   THE SHAPE OF THE PAGE (v3)
+   Header strip → filter bar → list. That is the whole thing.
 
-   This layer follows the corrected contract: prose is sans, mono is for DATA
-   ONLY (scores, counts, elapsed time, hostnames), sentence case, softer corners,
-   generous line-height, and the column widens to use the screen it is given.
+   v2 spent the first 320px of every screen on a 48px headline and a four-line
+   paragraph that never changes, then put the filters above the fold and left
+   them there while you scrolled 36,000px of job cards. So: the headline is
+   24px, the lede is one short paragraph, the run controls sit beside them
+   instead of below, and the filter bar sticks under the app bar so the control
+   that changes the list is always within reach of the list.
 
-   THE TWO VIEWS ARE DIFFERENT PRODUCTS
-     .dsh-career — a reading list. A sidebar holds the controls and the argument
-       for why these roles matter; the main column is one roomy stream with a
-       caption over each card. Bigger type, more air, never more than one column.
-     .dsh-boards — a triage console. One dense instrument bar carries the run
-       controls, the totals, the status mix and the filters; the list packs into
-       two columns as soon as there is room, with tight gaps.
+   COLOUR. The accent is for controls. Green is for scores. Status hues appear
+   only as 6px dots and thin segments, never as fills behind text.
    ============================================================================= */
 
 .dsh {
-  /* Widen past a narrow reading column when the shell gives us the room, but
-     never past the viewport, and symmetrically so we stay centred whatever the
-     shell's own layout is doing. Collapses to zero on small screens. */
-  --dsh-bleed: clamp(0px, (100vw - 3rem - 100%) / 2, 8rem);
-  --dsh-gap: 1rem;
-  --dsh-pad: 1rem;
-  --dsh-radius: var(--radius);
-
-  margin-inline: calc(-1 * var(--dsh-bleed));
-  container: dsh / inline-size;
-
   display: flex;
   flex-direction: column;
-  gap: 1.15rem;
-  /* Fill the screen: an empty or short list still reaches the fold. */
-  min-height: calc(100dvh - 9rem);
-
-  font-family: var(--font-sans);
-  color: var(--text);
-}
-
-.dsh-career {
-  --dsh-gap: 1.5rem;
-  --dsh-pad: 1.15rem;
-  --dsh-radius: var(--radius-lg);
-}
-
-.dsh-boards {
-  --dsh-gap: 0.75rem;
-  --dsh-pad: 0.85rem;
-}
-
-/* Numerals you read as data, not as language. */
-.dsh-num {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
-.dsh-sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  gap: var(--s4);
+  min-width: 0;
 }
 
 /* -----------------------------------------------------------------------------
-   Heading
+   Header strip
    -------------------------------------------------------------------------- */
 
 .dsh-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 1rem 2rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s5);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--line);
 }
 
 .dsh-head-txt {
-  flex: 1 1 26rem;
   min-width: 0;
 }
 
 .dsh-eyebrow {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  margin: 0 0 0.4rem;
-  font-size: 12.5px;
+  gap: 0.4rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--muted);
+  margin-bottom: var(--s1);
 }
 
 .dsh-dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
+  width: 5px;
+  height: 5px;
   border-radius: 999px;
   background: var(--accent);
+  flex: none;
 }
 
 .dsh-h1 {
-  margin: 0;
-  font-size: 1.35rem;
+  font-size: var(--fs-display);
   font-weight: 600;
+  letter-spacing: -0.022em;
   line-height: 1.2;
-  letter-spacing: -0.02em;
   color: var(--text);
-}
-
-.dsh-career .dsh-h1 {
-  font-size: clamp(1.45rem, 2.6vw, 1.85rem);
+  margin-bottom: var(--s2);
 }
 
 .dsh-lede {
-  margin: 0.5rem 0 0;
-  max-width: 66ch;
-  font-size: 13.5px;
-  line-height: 1.65;
+  font-size: var(--fs-body);
+  line-height: var(--lh-prose);
   color: var(--muted);
+  max-width: 68ch;
 }
 
-.dsh-career .dsh-lede {
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-/* -----------------------------------------------------------------------------
-   Body — career splits into rail + stream; boards stays one wide column.
-   -------------------------------------------------------------------------- */
-
-.dsh-body {
-  display: grid;
-  gap: 1.25rem;
-  align-items: start;
-  flex: 1;
+.dsh-head-run {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s3);
+  flex: none;
   min-width: 0;
 }
 
-/* The stream stretches to the full height of the row so an empty or short list
-   still reaches the bottom of the screen instead of leaving a dead half-page.
-   The asides keep their natural height. */
-.dsh-main {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  min-width: 0;
-  align-self: stretch;
-}
-
-.dsh-rail,
-.dsh-aside {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  min-width: 0;
-  align-self: start;
-}
-
-/* DOM order is controls → roles → the argument for reading them, which is the
-   right order on a phone. On a wide screen the two asides move to a right-hand
-   column and the roles take the space they deserve. */
-@container dsh (min-width: 58rem) {
-  .dsh-career .dsh-body {
-    grid-template-columns: minmax(0, 1fr) 20rem;
-    /* The stream spans both rows; the second row absorbs its extra height so the
-       two asides stay stacked together instead of drifting apart. */
-    grid-template-rows: auto 1fr;
-  }
-
-  .dsh-career .dsh-main {
-    grid-column: 1;
-    grid-row: 1 / span 2;
-  }
-
-  .dsh-career .dsh-rail {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .dsh-career .dsh-aside {
-    grid-column: 2;
-    grid-row: 2;
-  }
-}
-
 /* -----------------------------------------------------------------------------
-   Surfaces
-   -------------------------------------------------------------------------- */
-
-.dsh-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: var(--dsh-pad);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--dsh-radius);
-}
-
-.dsh-card-t {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  color: var(--text);
-}
-
-.dsh-fine {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--faint);
-}
-
-.dsh-why-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  margin: 0;
-}
-
-.dsh-why-list dt {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-
-.dsh-why-list dd {
-  margin: 0.15rem 0 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--muted);
-}
-
-/* -----------------------------------------------------------------------------
-   Buttons
-   -------------------------------------------------------------------------- */
-
-.dsh-cta,
-.dsh-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  padding: 0.55rem 0.95rem;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.2;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background var(--fast) var(--ease), color var(--fast) var(--ease),
-    border-color var(--fast) var(--ease), opacity var(--fast) var(--ease);
-}
-
-.dsh-cta {
-  font-weight: 600;
-  color: var(--on-accent);
-  background: var(--accent);
-  border: 1px solid transparent;
-}
-
-.dsh-cta:not(:disabled):hover {
-  background: var(--accent-hover);
-}
-
-.dsh-btn {
-  color: var(--text-dim);
-  background: transparent;
-  border: 1px solid var(--line-strong);
-}
-
-.dsh-btn:not(:disabled):hover {
-  color: var(--text);
-  background: var(--panel-hover);
-}
-
-.dsh-btn-quiet {
-  color: var(--muted);
-  border-color: transparent;
-}
-
-.dsh-btn-warn {
-  color: var(--red);
-  border-color: color-mix(in srgb, var(--red) 40%, transparent);
-}
-
-.dsh-btn-warn:not(:disabled):hover {
-  color: var(--red);
-  background: var(--red-bg);
-}
-
-.dsh-cta:disabled,
-.dsh-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-/* -----------------------------------------------------------------------------
-   Run panel + the wait
+   Run controls (DashRunPanel)
    -------------------------------------------------------------------------- */
 
 .dsh-run {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  align-items: flex-end;
+  gap: var(--s2);
   min-width: 0;
-}
-
-.dsh-run.is-bar {
-  flex: 1 1 22rem;
-  max-width: 34rem;
-}
-
-/* A minute-long wait takes the whole width of the console — it should be the
-   loudest thing on the page while it is happening, and impossible to mistake
-   for a stalled screen. */
-.dsh-run.is-bar.is-running {
-  flex-basis: 100%;
-  max-width: none;
 }
 
 .dsh-run-acts {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  align-items: center;
+  gap: var(--s2);
 }
 
-.dsh-run-note {
-  margin: 0;
-  max-width: 46ch;
-  font-size: 12.5px;
-  line-height: 1.6;
+.dsh-cta {
+  appearance: none;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: var(--r-sm);
+  padding: 0.42rem 0.85rem;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+
+.dsh-cta:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.dsh-cta:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.dsh-cta:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dsh-btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text-2);
+  border-radius: var(--r-sm);
+  padding: 0.42rem 0.8rem;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.dsh-btn:hover:not(:disabled) {
+  background: var(--panel-3);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.dsh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dsh-btn-go {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.dsh-btn-go:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--on-accent);
+}
+
+.dsh-btn-warn {
+  border-color: rgba(211, 112, 110, 0.34);
+  background: rgba(211, 112, 110, 0.12);
+  color: #e9b0af;
+}
+
+.dsh-btn-warn:hover:not(:disabled) {
+  background: rgba(211, 112, 110, 0.2);
+  border-color: rgba(211, 112, 110, 0.5);
+  color: #f3c6c5;
+}
+
+.dsh-btn-quiet {
+  background: transparent;
+  border-color: transparent;
   color: var(--muted);
 }
 
-.dsh-run-note strong {
-  font-weight: 500;
-  color: var(--text-dim);
+/* Right-ALIGNED, but not right-justified: ragged-left prose is genuinely
+   harder to read, and this note is the one place the app warns you that a
+   click costs a minute of waiting. */
+.dsh-run-note,
+.dsh-fine {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-snug);
+  color: var(--faint);
+  text-align: left;
+  width: 22rem;
+  max-width: 100%;
 }
 
+.dsh-run-note strong {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* --- a run in flight ---
+   The API answers once, at the end, so there is no honest percentage. What
+   this shows instead is that the request is still open and how long it has
+   been. The bar is indeterminate and says so. */
+
 .dsh-prog {
+  width: 100%;
+  min-width: 17rem;
+  max-width: 24rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.75rem 0.8rem;
-  background: var(--bg-elev);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-sm);
+  gap: var(--s2);
+  padding: var(--s3);
+  border-radius: var(--r);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  text-align: left;
 }
 
 .dsh-prog-head {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--s2);
 }
 
 .dsh-prog-t {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
@@ -373,304 +244,149 @@
   margin-left: auto;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--muted);
-  white-space: nowrap;
 }
 
-/* Indeterminate on purpose: the API answers once, at the end, so a percentage
-   would be invented. A sweep says "alive", not "37% done". */
 .dsh-bar {
-  position: relative;
   height: 3px;
   border-radius: 999px;
-  background: var(--line);
+  background: var(--panel-3);
   overflow: hidden;
 }
 
-.dsh-bar > i {
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  width: 36%;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--accent),
-    transparent
-  );
-  animation: dsh-sweep 2.1s var(--ease) infinite;
+.dsh-bar i {
+  display: block;
+  width: 34%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: dsh-slide 1.5s var(--ease) infinite;
 }
 
-@keyframes dsh-sweep {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(310%); }
+@keyframes dsh-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(395%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsh-bar i { animation: none; width: 100%; opacity: 0.45; }
 }
 
 .dsh-steps {
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: var(--s1);
 }
 
 .dsh-step {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: var(--text-dim);
+  align-items: flex-start;
+  gap: var(--s2);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-snug);
+  color: var(--muted);
 }
 
 .dsh-step-i {
+  width: 15px;
+  height: 15px;
   flex: none;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
   font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--faint);
+  font-size: 9.5px;
+  color: var(--muted);
 }
 
 .dsh-prog-say {
-  margin: 0;
-  max-width: 52ch;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--muted);
-}
-
-/* -----------------------------------------------------------------------------
-   Controls
-   -------------------------------------------------------------------------- */
-
-.dsh-ctl {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
-}
-
-.dsh-ctl-k {
-  flex: none;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted);
-}
-
-.dsh-scores {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  background: var(--bg-elev);
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-}
-
-.dsh-score {
-  padding: 0.28rem 0.62rem;
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  line-height: 1.3;
-  color: var(--muted);
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
-}
-
-.dsh-score:hover {
-  color: var(--text);
-}
-
-.dsh-score.is-on {
-  color: var(--text);
-  background: var(--panel-hover);
-  box-shadow: var(--shadow);
-}
-
-.dsh-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  min-width: 0;
-}
-
-.dsh-tab {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  padding: 0.3rem 0.62rem;
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  line-height: 1.3;
-  color: var(--muted);
-  background: var(--bg-elev);
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: color var(--fast) var(--ease), background var(--fast) var(--ease),
-    border-color var(--fast) var(--ease);
-}
-
-.dsh-tab:hover {
-  color: var(--text);
-  border-color: var(--line);
-}
-
-.dsh-tab-n {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-snug);
   color: var(--faint);
 }
 
-.dsh-tab[aria-selected='true'] {
-  color: var(--dsh-c, var(--text));
-  background: color-mix(in srgb, var(--dsh-c, var(--text)) 13%, transparent);
-  border-color: color-mix(in srgb, var(--dsh-c, var(--text)) 34%, transparent);
-}
-
-.dsh-tab[aria-selected='true'] .dsh-tab-n {
-  color: inherit;
-}
-
-/* Status hues — state, never decoration. */
-.dsh-c-all { --dsh-c: var(--accent); }
-.dsh-c-new { --dsh-c: var(--grey); }
-.dsh-c-outreach { --dsh-c: var(--amber); }
-.dsh-c-applied { --dsh-c: var(--cyan); }
-.dsh-c-interview { --dsh-c: var(--teal); }
-.dsh-c-rejected { --dsh-c: var(--red); }
-
-/* In the rail the two controls stack as labelled blocks. */
-.dsh-filters {
-  gap: 0.85rem;
-}
-
-.dsh-rail .dsh-ctl {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.4rem;
-}
-
 /* -----------------------------------------------------------------------------
-   Boards console — one instrument, hairline-divided.
+   Readout (boards)
    -------------------------------------------------------------------------- */
-
-.dsh-console {
-  display: flex;
-  flex-direction: column;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.dsh-console-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.85rem 1.5rem;
-  padding: 0.85rem 0.95rem;
-}
-
-.dsh-console-row + .dsh-console-row {
-  border-top: 1px solid var(--line-soft);
-}
-
-.dsh-console-row.is-top {
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-/* Filters keep their own register, full width, so triage stays usable while the
-   run panel above them grows a progress block mid-fetch. */
-.dsh-console-row.is-filters {
-  align-items: center;
-  gap: 0.6rem 1.75rem;
-}
 
 .dsh-readout {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  min-width: 13rem;
-}
-
-/* In the boards header the totals balance the prose instead of leaving the top
-   right of a 1440px screen empty. */
-.dsh-head .dsh-readout {
-  flex: none;
-  padding-top: 0.2rem;
+  align-items: flex-end;
+  gap: var(--s2);
+  min-width: 15rem;
 }
 
 .dsh-stats {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.2rem 1.5rem;
+  align-items: baseline;
+  gap: var(--s4);
 }
 
 .dsh-stat {
   display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
+  align-items: baseline;
+  gap: 0.35rem;
 }
 
 .dsh-stat-v {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 600;
-  line-height: 1.1;
+  line-height: 1;
   letter-spacing: -0.03em;
   color: var(--text);
 }
 
 .dsh-stat.is-lead .dsh-stat-v {
-  font-size: 1.6rem;
-  color: var(--accent);
+  font-size: 1.35rem;
+  color: var(--text);
 }
 
-/* Waiting for the first read — a placeholder, not a number. */
-.dsh-stat-v.is-wait,
-.dsh-stat.is-lead .dsh-stat-v.is-wait {
+.dsh-stat-v.is-wait {
   color: var(--faint);
 }
 
 .dsh-stat-k {
-  font-size: 11.5px;
-  color: var(--faint);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  white-space: nowrap;
 }
 
+/* The pipeline at a glance: one 3px bar, segmented by how many roles sit in
+   each state. Colour is doing real work here, so it is allowed. */
 .dsh-mix {
   display: flex;
-  gap: 1px;
+  gap: 2px;
+  width: 100%;
+  min-width: 12rem;
   height: 3px;
   border-radius: 999px;
   overflow: hidden;
-  background: var(--line-soft);
 }
 
 .dsh-mix-seg {
-  min-width: 2px;
-  background: var(--dsh-c, var(--grey));
-  opacity: 0.85;
+  background: var(--st);
+  opacity: 0.75;
+  border-radius: 999px;
 }
 
-/* Which boards the pool actually came from. Read-only — this is context, not a
-   source filter: career pages are their own dashboard, not a tab in this one. */
+/* -----------------------------------------------------------------------------
+   Source legend (boards)
+   -------------------------------------------------------------------------- */
+
 .dsh-legend {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 0.35rem 1rem;
-  margin: 0 0 0 auto;
-  max-width: 26rem;
-  font-size: 12px;
+  gap: 0.35rem 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--muted);
+  margin-top: calc(var(--s2) * -1);
 }
 
 .dsh-legend-k {
@@ -679,229 +395,350 @@
 
 .dsh-legend-i {
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 0.3rem;
 }
 
 .dsh-legend-n {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 11.5px;
-  color: var(--text-dim);
+  color: var(--text-2);
 }
 
 /* -----------------------------------------------------------------------------
-   Stream
+   Filter bar
+
+   Sticks under the app bar. When you are 6,000px into a queue and want to jump
+   from 50+ to 70+, the control has to be where your eyes already are.
    -------------------------------------------------------------------------- */
 
-.dsh-count {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--muted);
+.dsh-console {
+  position: sticky;
+  top: var(--stick-top);
+  z-index: 20;
+  margin: 0 calc(var(--page-pad) * -1);
+  padding: var(--s2) var(--page-pad);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(140%) blur(12px);
+  -webkit-backdrop-filter: saturate(140%) blur(12px);
+  border-bottom: 1px solid var(--line);
 }
 
-.dsh-count .dsh-num {
-  color: var(--text-dim);
+.dsh-console-in {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s5);
+}
+
+.dsh-ctl {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.dsh-ctl-k {
+  font-size: var(--fs-xs);
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+/* --- score floor --- */
+
+.dsh-scores {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.dsh-score {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 5px;
+  padding: 0.2rem 0.5rem;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: nowrap;
+  transition:
+    color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+
+.dsh-score:hover:not(.is-on) {
+  color: var(--text);
+  background: var(--panel-3);
+}
+
+.dsh-score.is-on {
+  color: var(--text);
+  background: var(--panel-3);
+  border-color: var(--line-strong);
+}
+
+/* --- status --- */
+
+.dsh-tabs {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.dsh-tab {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--r-sm);
+  padding: 0.2rem 0.5rem;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: nowrap;
+  transition:
+    color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+
+.dsh-tab:hover {
+  color: var(--text);
+  background: var(--panel);
+}
+
+.dsh-tab[aria-selected='true'] {
+  color: var(--text);
+  background: var(--panel-3);
+  border-color: var(--line-strong);
+}
+
+.dsh-tab-n {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.dsh-tab[aria-selected='true'] .dsh-tab-n {
+  color: var(--text-2);
+}
+
+/* --- count --- */
+
+.dsh-count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.dsh-capped {
+  margin-top: var(--s2);
+  font-size: var(--fs-xs);
+  color: var(--faint);
+}
+
+.dsh-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--text-2);
+}
+
+/* -----------------------------------------------------------------------------
+   The list
+   -------------------------------------------------------------------------- */
+
+.dsh-main {
+  min-width: 0;
 }
 
 .dsh-list {
-  display: grid;
-  gap: var(--dsh-gap);
-  align-items: start;
-  margin: 0;
-  padding: 0;
   list-style: none;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Boards only: two columns once the column is genuinely wide enough. Career
-   pages stay single-column — they are meant to be read, not scanned. */
-@container dsh (min-width: 58rem) {
-  .dsh-boards .dsh-list,
-  .dsh-boards .dsh-sk {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+/* Hairlines between rows, not boxes around them. 140 boxes is a brick wall;
+   140 hairlines is a list. */
+.dsh-item + .dsh-item {
+  border-top: 1px solid var(--line-soft);
 }
 
 .dsh-item {
   min-width: 0;
+  /* Settles in once, staggered across the first dozen rows (--i is capped in
+     the component). Nothing below the fold animates. */
+  animation: u-rise 0.34s var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 22ms);
 }
 
+/* Career pages get a caption line: which company's own site this came off,
+   and where it sits in a short ranked list. Both are worth the 16px on a
+   ten-item reading list; neither would be on a queue of 140. */
 .dsh-item-cap {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin: 0 0 0.45rem;
-  padding-left: 0.15rem;
-  min-width: 0;
-  font-size: 12px;
-  color: var(--faint);
+  align-items: baseline;
+  gap: var(--s2);
+  padding: var(--s2) 0 0 0.6rem;
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+}
+
+.dsh-item:first-child .dsh-item-cap {
+  padding-top: var(--s1);
 }
 
 .dsh-item-i {
-  flex: none;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  color: var(--line-strong);
+  color: var(--faint);
 }
 
 .dsh-item-host {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
   color: var(--muted);
 }
 
-.dsh-fresh {
-  flex: none;
-  margin-left: auto;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  font-size: 11px;
-  color: var(--accent);
-  background: var(--accent-dim);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
-  white-space: nowrap;
-}
-
 /* -----------------------------------------------------------------------------
-   Loading — skeletons shaped like the cards they stand in for.
-   -------------------------------------------------------------------------- */
+   Empty states
 
-.dsh-sk {
-  display: grid;
-  gap: var(--dsh-gap);
-  align-items: start;
-}
-
-.dsh-sk-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  padding: 1.1rem;
-  /* Darker than the shimmering bars, or the placeholders vanish into the card. */
-  background: var(--bg-elev);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--dsh-radius);
-}
-
-.dsh-sk-line {
-  display: block;
-  height: 11px;
-}
-
-.dsh-sk-line.is-title { height: 16px; width: 46%; }
-.dsh-sk-line.is-meta  { width: 26%; }
-
-.dsh-sk-block {
-  display: block;
-  height: 76px;
-}
-
-.dsh-sk-row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.dsh-sk-pill {
-  display: block;
-  height: 26px;
-  width: 5.5rem;
-  border-radius: 999px;
-}
-
-.dsh-sk-pill.is-wide {
-  width: 8rem;
-}
-
-/* -----------------------------------------------------------------------------
-   Empty states — they fill the space rather than leaving a dead half-screen.
+   A real answer, not a leftover. Headline, two lines of why, one button that
+   resolves it — centred in a panel so it reads as settled rather than pending.
    -------------------------------------------------------------------------- */
 
 .dsh-empty {
   display: flex;
-  flex: 1;
   flex-direction: column;
-  justify-content: center;
-  gap: 0.7rem;
-  padding: clamp(1.4rem, 4cqi, 2.75rem) clamp(1.15rem, 3cqi, 2.25rem);
-  background: var(--panel);
+  align-items: center;
+  text-align: center;
+  gap: var(--s3);
+  padding: var(--s7) var(--s5);
+  margin-top: var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--dsh-radius);
-}
-
-/* A failed list read gets the space the list would have had, with the message
-   sitting where the eye already is rather than pinned to the top of a big box. */
-.dsh-errslot {
-  display: grid;
-  align-content: center;
-  flex: 1;
-  min-height: 14rem;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in srgb, var(--accent) 5%, transparent) 0%,
+      transparent 60%
+    ),
+    var(--panel);
+  animation: u-rise 0.34s var(--ease) both;
 }
 
 .dsh-empty-t {
-  margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--fs-h2);
   font-weight: 600;
-  letter-spacing: -0.015em;
   color: var(--text);
+  letter-spacing: -0.015em;
 }
 
 .dsh-empty-b {
-  margin: 0;
-  max-width: 58ch;
-  font-size: 13.5px;
-  line-height: 1.7;
+  font-size: var(--fs-body);
+  line-height: var(--lh-prose);
   color: var(--muted);
+  max-width: 56ch;
+}
+
+.dsh-empty-b strong {
+  color: var(--text-2);
+  font-weight: 600;
 }
 
 .dsh-empty-acts {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.35rem;
+  gap: var(--s2);
+  margin-top: var(--s1);
 }
-
-/* Three dashed rows where the roles will land. Restrained: no icon, no art. */
-.dsh-ghosts {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.9rem;
-  max-width: 34rem;
-}
-
-.dsh-ghosts > span {
-  height: 2.4rem;
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-sm);
-}
-
-.dsh-ghosts > span:nth-child(2) { opacity: 0.6; }
-.dsh-ghosts > span:nth-child(3) { opacity: 0.3; }
 
 /* -----------------------------------------------------------------------------
-   Feedback — a finished run, and a failed one.
+   Skeleton — shaped like the rows that are about to replace it
+   -------------------------------------------------------------------------- */
+
+.dsh-sk {
+  display: flex;
+  flex-direction: column;
+}
+
+.dsh-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.dsh-sk-row {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr) minmax(0, 1fr) 4rem;
+  align-items: center;
+  gap: 0 var(--s4);
+  padding: 0.7rem 0.55rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.dsh-sk-row:first-child {
+  border-top: 0;
+}
+
+.dsh-sk-score {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dsh-sk-main {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dsh-sk-line {
+  height: 9px;
+  display: block;
+}
+
+.dsh-sk-line.is-title { width: 62%; height: 11px; }
+.dsh-sk-line.is-sub   { width: 84%; }
+.dsh-sk-line.is-num   { width: 100%; height: 12px; }
+.dsh-sk-line.is-meter { width: 100%; height: 3px; }
+.dsh-sk-line.is-verd  { width: 92%; }
+.dsh-sk-line.is-verd2 { width: 58%; }
+.dsh-sk-line.is-tail  { width: 100%; }
+
+/* -----------------------------------------------------------------------------
+   Feedback: the note after a run, and errors
    -------------------------------------------------------------------------- */
 
 .dsh-note {
   display: flex;
   align-items: flex-start;
-  gap: 0.65rem;
-  padding: 0.7rem 0.85rem;
-  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
-  border-radius: var(--radius);
+  gap: var(--s3);
+  padding: var(--s3);
+  border-radius: var(--r);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--score-hi);
 }
 
 .dsh-note-tick {
+  width: 18px;
+  height: 18px;
   flex: none;
-  color: var(--accent);
-  font-size: 13px;
-  line-height: 1.5;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: rgba(78, 201, 142, 0.15);
+  color: var(--score-hi);
+  font-size: 11px;
 }
 
 .dsh-note-txt {
@@ -910,197 +747,308 @@
 }
 
 .dsh-note-t {
-  margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
 
 .dsh-note-l {
-  margin: 0.15rem 0 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  color: var(--muted);
 }
 
 .dsh-note-meta {
-  flex: none;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--faint);
   white-space: nowrap;
+  flex: none;
 }
 
 .dsh-note-x {
-  flex: none;
-  width: 1.4rem;
-  height: 1.4rem;
-  display: grid;
-  place-items: center;
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--faint);
   font-size: 15px;
   line-height: 1;
-  color: var(--faint);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  flex: none;
 }
 
 .dsh-note-x:hover {
   color: var(--text);
-  background: var(--panel-hover);
+}
+
+.dsh-errslot {
+  margin-top: var(--s4);
 }
 
 .dsh-err {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.85rem 0.95rem;
-  background: color-mix(in srgb, var(--red) 7%, var(--panel));
-  border: 1px solid color-mix(in srgb, var(--red) 26%, transparent);
-  border-radius: var(--radius);
+  gap: var(--s3);
+  padding: var(--s4);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  border: 1px solid rgba(211, 112, 110, 0.3);
+  border-left: 2px solid var(--red);
 }
 
 .dsh-err-mark {
+  width: 20px;
+  height: 20px;
   flex: none;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--red) 20%, transparent);
-  color: var(--red);
-  font-size: 13px;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: rgba(211, 112, 110, 0.16);
+  color: #e9b0af;
+  font-size: 12px;
   font-weight: 700;
-  line-height: 1;
 }
 
 .dsh-err-txt {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
 }
 
 .dsh-err-t {
-  margin: 0;
-  font-size: 13.5px;
+  font-size: var(--fs-h3);
   font-weight: 600;
   color: var(--text);
 }
 
 .dsh-err-b {
-  margin: 0.3rem 0 0;
-  max-width: 64ch;
-  font-size: 13px;
-  line-height: 1.65;
-  color: var(--text-dim);
+  font-size: var(--fs-body);
+  line-height: var(--lh-prose);
+  color: var(--muted);
+  max-width: 68ch;
 }
 
 .dsh-err-h {
-  margin: 0.35rem 0 0;
-  max-width: 64ch;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  color: var(--text-2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  background: var(--bg-sunk);
+  border: 1px solid var(--line-soft);
+  max-width: 68ch;
 }
 
 .dsh-err-acts {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.7rem;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin-top: var(--s2);
 }
 
 .dsh-err-more {
-  min-width: 0;
+  font-size: var(--fs-xs);
+  color: var(--faint);
+  align-self: center;
 }
 
 .dsh-err-more summary {
-  font-size: 12px;
-  color: var(--muted);
   cursor: pointer;
+  padding: 0.25rem 0;
+  list-style: none;
+}
+
+.dsh-err-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.dsh-err-more summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 0.35rem;
+  font-size: 9px;
+}
+
+.dsh-err-more[open] summary::before {
+  content: '▾';
 }
 
 .dsh-err-more summary:hover {
-  color: var(--text-dim);
+  color: var(--muted);
 }
 
 .dsh-err-raw {
-  margin: 0.4rem 0 0;
-  max-width: 70ch;
+  margin-top: var(--s1);
+  padding: var(--s2);
+  border-radius: var(--r-sm);
+  background: var(--bg-sunk);
+  border: 1px solid var(--line-soft);
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--muted);
   word-break: break-word;
+  max-width: 68ch;
 }
 
 /* -----------------------------------------------------------------------------
-   Narrow — 360px has to work: nothing truncates, nothing overflows sideways.
+   The folded footnote (career)
    -------------------------------------------------------------------------- */
 
-@container dsh (max-width: 34rem) {
-  .dsh-console-row.is-filters,
-  .dsh-console-row.is-top {
-    flex-direction: column;
+.dsh-note-fold {
+  margin-top: var(--s4);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-sm);
+}
+
+.dsh-note-fold > summary {
+  cursor: pointer;
+  color: var(--muted);
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0;
+  border-radius: var(--r-sm);
+}
+
+.dsh-note-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dsh-note-fold > summary::before {
+  content: '▸';
+  font-size: 11px;
+  line-height: 1;
+  color: var(--faint);
+}
+
+.dsh-note-fold[open] > summary::before {
+  content: '▾';
+}
+
+.dsh-note-fold > summary:hover {
+  color: var(--text);
+}
+
+.dsh-why-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--s4);
+  margin-top: var(--s3);
+}
+
+.dsh-why-list dt {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 2px;
+}
+
+.dsh-why-list dd {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-prose);
+  color: var(--muted);
+}
+
+/* -----------------------------------------------------------------------------
+   Narrow
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .dsh-head {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s4);
+  }
+
+  .dsh-head-run {
     align-items: stretch;
   }
 
-  .dsh-ctl {
-    flex-direction: column;
+  .dsh-run,
+  .dsh-readout {
     align-items: stretch;
-    gap: 0.4rem;
-  }
-
-  /* Full-width controls are right on a phone and wrong on a desktop column. */
-  .dsh-scores {
-    justify-content: space-between;
-    align-self: stretch;
   }
 
   .dsh-run-acts .dsh-cta {
-    flex: 1 1 auto;
+    flex: 1;
   }
 
-  /* The row stacks here, so the main axis is vertical: leave flex-basis alone
-     or it becomes a 22rem-tall run panel with a hole under the buttons. */
-  .dsh-run.is-bar,
-  .dsh-run.is-bar.is-running {
-    flex: 0 0 auto;
+  .dsh-run-note,
+  .dsh-fine {
+    text-align: left;
     max-width: none;
   }
 
-  .dsh-legend {
+  .dsh-stats {
     justify-content: flex-start;
-    margin-left: 0;
-    max-width: none;
   }
 
-  .dsh-note {
-    flex-wrap: wrap;
+  .dsh-prog {
+    max-width: none;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 860px) {
+  /* Below this width the app bar goes to two rows and stops being sticky
+     (see shell.css) — two pinned strips would take a fifth of a phone screen.
+     The filter bar takes the top slot instead, because that is the control you
+     actually reach for while scrolling a queue. --stick-top handles the
+     offset; this just keeps the bar flush with the viewport edge. */
+  .dsh-console {
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  /* One scrolling strip rather than three wrapped rows. Wrapped, this bar was
+     155px tall — 18% of a phone screen, permanently, for controls you touch
+     twice a session. Scrolled, it is 40px and the two you actually use (Any /
+     50+) are the first things in it. */
+  .dsh-console-in {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: var(--s4);
+    padding-right: var(--page-pad);
+    margin-right: calc(var(--page-pad) * -1);
+  }
+
+  .dsh-console-in::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dsh-ctl,
+  .dsh-tabs,
+  .dsh-scores {
+    flex-wrap: nowrap;
+    flex: none;
+  }
+
+  .dsh-count {
+    margin-left: 0;
+    flex: none;
+  }
+
+  .dsh-empty {
+    padding: var(--s6) var(--s4);
   }
 
   .dsh-note-meta {
-    order: 3;
-    width: 100%;
-    padding-left: 1.3rem;
+    display: none;
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .dsh-bar > i {
-    animation: none;
-    width: 100%;
-    opacity: 0.5;
+  .dsh-sk-row {
+    grid-template-columns: 2.3rem minmax(0, 1fr);
   }
-}
 
-/* Page-cap notice: present but quiet — it is context, not a warning. */
-.dsh-capped {
-  margin: 0 0 var(--sp-3);
-  padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-2);
-  color: var(--ink-2);
-  font-size: 0.85rem;
+  .dsh-sk-verd,
+  .dsh-sk-tail {
+    display: none;
+  }
 }
