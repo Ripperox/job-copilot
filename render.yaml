@@ -47,12 +47,39 @@ services:
       - key: JSEARCH_RAPIDAPI_KEY
         sync: false
 
-      # --- operator LLM key: used ONLY for the cached demo job, never for users ---
+      # --- operator LLM keys: used ONLY for the cached demo job, never for users ---
+      # Set BOTH. Scoring and career-page extraction fail over from one provider
+      # to the next when a free tier is exhausted, and a chain of one is not a
+      # chain — with only Groq configured, its 100k tokens/day ends the run.
+      # Cerebras is deliberately absent: the key authenticates, but every model
+      # in its catalog returns 402 without billing.
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
         value: llama-3.3-70b-versatile
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
 
       # How often the shared job pool refreshes. 60 = hourly.
       - key: FETCH_INTERVAL_MINUTES
         value: "60"
+
+      # --- career-page scraping ---
+      # These were missing from this blueprint entirely, so Render never prompted
+      # for them and the feature silently never ran in production: the career
+      # pages dashboard has produced zero jobs since launch.
+      #
+      # The scraper chain is Firecrawl -> Tavily -> Exa -> Jina. Jina needs no key,
+      # so scraping degrades rather than stopping once Firecrawl's 1,000 monthly
+      # credits are gone — but Firecrawl is much better, so set it.
+      #
+      # The URL list is config, not a secret, so it lives here: a fresh deploy
+      # then works without anyone remembering to paste it.
+      - key: FIRECRAWL_API_KEY
+        sync: false
+      - key: SCRAPE_INTERVAL_HOURS
+        value: "24"
+      - key: SCRAPE_CAREER_PAGES
+        value: "https://zerodha.com/careers/,https://groww.in/careers,https://upstox.com/careers,https://www.angelone.in/careers,https://careers.smallcase.com,https://raisefinancial.freshteam.com/jobs,https://razorpay.com/jobs/jobs-all/,https://juspay.io/careers,https://www.cashfree.com/careers/,https://www.phonepe.com/careers/job-openings/,https://careers.cred.club,https://jupiter.money/careers/,https://www.sliceit.com/careers,https://setu.co/careers,https://www.dream11.com/careers,https://careers.hotstar.com,https://careers.swiggy.com/,https://www.zomato.com/careers,https://www.meesho.io/jobs,https://zeptonow.com/careers,https://unicoconnect.com/careers,https://www.stackbinary.io/careers,https://snapmint.com/careers,https://www.ycombinator.com/jobs"
