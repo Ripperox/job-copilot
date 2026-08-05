@@ -8,7 +8,7 @@ import { decryptSecret } from './crypto';
 // are reserved for the cached one-job demo, so cost never scales with signups.
 // A user with no key gets heuristic scoring, not the operator's quota.
 
-export type KeyProvider = 'groq' | 'gemini' | 'anthropic';
+export type KeyProvider = 'cerebras' | 'groq' | 'gemini' | 'anthropic';
 
 export interface UserLLM {
   config: Config;
@@ -19,6 +19,7 @@ export interface UserLLM {
 // Providers use distinctive key prefixes, so the user can paste a key from any
 // of them without having to say which it is.
 export function detectProvider(key: string): KeyProvider {
+  if (key.startsWith('csk-')) return 'cerebras';
   if (key.startsWith('gsk_')) return 'groq';
   if (key.startsWith('sk-ant-')) return 'anthropic';
   return 'gemini'; // Google keys look like "AI…" or "AQ.…"
@@ -28,6 +29,7 @@ export function detectProvider(key: string): KeyProvider {
 // missing or broken user key can never silently spend the operator's quota.
 export function configForKey(base: Config, provider: KeyProvider, key: string): Config {
   const blank = withoutLLM(base);
+  if (provider === 'cerebras') return { ...blank, cerebrasApiKey: key };
   if (provider === 'groq') return { ...blank, groqApiKey: key };
   if (provider === 'anthropic') return { ...blank, anthropicApiKey: key };
   return { ...blank, geminiApiKey: key };
@@ -53,5 +55,5 @@ export async function llmConfigForUser(
 
 // Strips every provider key so scoring degrades to the keyword heuristic.
 function withoutLLM(base: Config): Config {
-  return { ...base, geminiApiKey: '', groqApiKey: '', anthropicApiKey: '' };
+  return { ...base, cerebrasApiKey: '', geminiApiKey: '', groqApiKey: '', anthropicApiKey: '' };
 }

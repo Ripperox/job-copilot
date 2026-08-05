@@ -272,7 +272,7 @@ export const db = {
     userId: string,
     encrypted: string,
     mask: string,
-    provider: 'groq' | 'gemini' | 'anthropic',
+    provider: 'cerebras' | 'groq' | 'gemini' | 'anthropic',
   ): Promise<void> {
     await query(
       `INSERT INTO user_keys (user_id, gemini_key_enc, gemini_key_mask, provider, updated_at)
@@ -290,11 +290,11 @@ export const db = {
   // plaintext key exists only for the duration of one LLM call.
   async getUserKeyRecord(
     userId: string,
-  ): Promise<{ encrypted: string; mask: string; provider: 'groq' | 'gemini' | 'anthropic' } | undefined> {
+  ): Promise<{ encrypted: string; mask: string; provider: 'cerebras' | 'groq' | 'gemini' | 'anthropic' } | undefined> {
     const { rows } = await query<{
       gemini_key_enc: string;
       gemini_key_mask: string;
-      provider: 'groq' | 'gemini' | 'anthropic';
+      provider: 'cerebras' | 'groq' | 'gemini' | 'anthropic';
     }>(
       'SELECT gemini_key_enc, gemini_key_mask, provider FROM user_keys WHERE user_id = $1',
       [userId],

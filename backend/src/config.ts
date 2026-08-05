@@ -14,9 +14,15 @@ export const config = {
   groqModel: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
   anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
-  // Google Gemini — generous free tier (1M TPM, ~1500 req/day). Preferred when set.
+  // Google Gemini — measured 2026-08-04: only ~20 requests/day free on
+  // gemini-3.6-flash, and 0 on the older 2.0 models.
   geminiApiKey: process.env.GEMINI_API_KEY || '',
   geminiModel: process.env.GEMINI_MODEL || 'gemini-flash-latest',
+  // Cerebras — by far the largest free tier (~1M tokens/day, 14,400 req/day),
+  // which is why it is preferred. Free-tier context is capped near 8k tokens,
+  // so batches sent to it are deliberately smaller.
+  cerebrasApiKey: process.env.CEREBRAS_API_KEY || '',
+  cerebrasModel: process.env.CEREBRAS_MODEL || 'llama-3.3-70b',
   // JSearch via RapidAPI (aggregates Google for Jobs → LinkedIn, Indeed, Glassdoor…)
   jsearchApiKey: process.env.JSEARCH_RAPIDAPI_KEY || '',
   // Pages per role query (10 jobs/page). More = more coverage but more API quota.

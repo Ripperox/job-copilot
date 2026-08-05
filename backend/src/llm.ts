@@ -1,6 +1,6 @@
 import { Config } from './config';
 
-export type LLMProvider = 'gemini' | 'groq' | 'anthropic' | 'heuristic';
+export type LLMProvider = 'cerebras' | 'gemini' | 'groq' | 'anthropic' | 'heuristic';
 
 // Carries the provider's HTTP status so callers can tell "this key is wrong"
 // (401/403) from "this key is fine but out of quota right now" (429).
@@ -16,34 +16,125 @@ export function isRateLimit(e: unknown): boolean {
 }
 
 // Errors where retrying — with a smaller batch or anything else — cannot help
-// for the remainder of this run: the key is wrong (401/403) or the quota is
-// gone (429). Callers should stop calling the provider rather than fan out.
+// for the remainder of this run: the key is wrong (401/403), the account cannot
+// pay for the model (402), or the quota is gone (429). Callers should stop
+// calling THIS provider and move to the next one rather than fan out.
+// Gemini answers an invalid key with HTTP 400 INVALID_ARGUMENT / API_KEY_INVALID
+// rather than 401 (verified 2026-08-05). Status alone therefore misses it, the
+// caller mistakes it for "batch too big", splits, and fans out to one doomed
+// request per job. Match the message as well.
+const AUTH_MESSAGE =
+  /api[ _]?key not valid|api_key_invalid|invalid api[ _]?key|unauthorized|permission denied|payment required|billing/i;
+
 export function isTerminalForRun(e: unknown): boolean {
-  return e instanceof LLMError && (e.status === 401 || e.status === 403 || e.status === 429);
+  if (!(e instanceof LLMError)) return false;
+  if (e.status === 401 || e.status === 402 || e.status === 403 || e.status === 429) return true;
+  return e.status === 400 && AUTH_MESSAGE.test(e.message);
 }
 
-// Groq is preferred over Gemini on measured free-tier capacity (2026-08-03):
-// Groq llama-3.3-70b allows ~1000 requests/day, while Gemini's free tier is
-// ~20 requests/day on gemini-3.6-flash and 0 on the older 2.0 models. Scoring a
-// job pool needs hundreds of calls a day, so Groq is the only workable default.
+// Why a provider was retired, for the run log.
+export function terminalReason(e: unknown): string {
+  if (!(e instanceof LLMError)) return 'failed';
+  if (e.status === 429) return 'rate limited';
+  if (e.status === 402) return 'payment required';
+  return 'key rejected';
+}
+
+// Preference order is set by measured free-tier capacity, because this workload
+// (extracting career pages + scoring a few hundred jobs daily) is large enough
+// that the free ceiling is the binding constraint. Measured 2026-08-04:
+//
+//   groq        ~100,000 tokens/day, 1,000 req/day   <- most usable free tier
+//   gemini            ~20 requests/day on 3.6-flash  (exhausts almost at once)
+//   cerebras    key authenticates, but every model in the catalog returns
+//               402 Payment Required — there is no usable free tier, so it
+//               ranks last despite the headline quota. Kept because it is
+//               excellent once billing is on, and BYOK users may have paid.
+//   anthropic   paid only
+//
+// Cerebras caps context near 8k tokens, so batch sizes are smaller for it —
+// see PAGES_PER_REQUEST and BATCH_SIZE.
+const PREFERENCE: Exclude<LLMProvider, 'heuristic'>[] = [
+  'groq',
+  'gemini',
+  'cerebras',
+  'anthropic',
+];
+
+export function keyFor(config: Config, provider: LLMProvider): string {
+  if (provider === 'cerebras') return config.cerebrasApiKey;
+  if (provider === 'groq') return config.groqApiKey;
+  if (provider === 'gemini') return config.geminiApiKey;
+  if (provider === 'anthropic') return config.anthropicApiKey;
+  return '';
+}
+
+/**
+ * Every provider this config can actually reach, best first.
+ *
+ * Free tiers die without warning — a quota resets to zero, a model moves behind
+ * billing (Cerebras did exactly that). One dead provider must not sink a run
+ * when working keys are sitting right there, so callers walk this list.
+ */
+export function llmProviderChain(config: Config): Exclude<LLMProvider, 'heuristic'>[] {
+  return PREFERENCE.filter((p) => Boolean(keyFor(config, p)));
+}
+
+/** Narrows a config to exactly one provider, so no call can silently use another. */
+export function configForProvider(base: Config, provider: LLMProvider): Config {
+  return {
+    ...base,
+    cerebrasApiKey: provider === 'cerebras' ? base.cerebrasApiKey : '',
+    groqApiKey: provider === 'groq' ? base.groqApiKey : '',
+    geminiApiKey: provider === 'gemini' ? base.geminiApiKey : '',
+    anthropicApiKey: provider === 'anthropic' ? base.anthropicApiKey : '',
+  };
+}
+
 export function llmProvider(config: Config): LLMProvider {
-  if (config.groqApiKey) return 'groq';
-  if (config.geminiApiKey) return 'gemini';
-  if (config.anthropicApiKey) return 'anthropic';
-  return 'heuristic';
+  return llmProviderChain(config)[0] ?? 'heuristic';
 }
 
 export function hasLLM(config: Config): boolean {
-  return Boolean(config.geminiApiKey || config.groqApiKey || config.anthropicApiKey);
+  return llmProviderChain(config).length > 0;
 }
 
 // Send a single-user-message prompt to the configured LLM and return its text.
-// Prefers Gemini (free, generous quota), then Groq, then Anthropic. Throws if none set.
+// Uses the highest-preference provider this config has a key for; callers that
+// want failover walk llmProviderChain() and narrow with configForProvider().
 export async function llmComplete(prompt: string, config: Config, maxTokens = 500): Promise<string> {
-  if (config.groqApiKey) return groqComplete(prompt, config, maxTokens);
-  if (config.geminiApiKey) return geminiComplete(prompt, config, maxTokens);
-  if (config.anthropicApiKey) return anthropicComplete(prompt, config, maxTokens);
-  throw new Error('No LLM configured');
+  switch (llmProvider(config)) {
+    case 'groq':
+      return groqComplete(prompt, config, maxTokens);
+    case 'gemini':
+      return geminiComplete(prompt, config, maxTokens);
+    case 'cerebras':
+      return cerebrasComplete(prompt, config, maxTokens);
+    case 'anthropic':
+      return anthropicComplete(prompt, config, maxTokens);
+    default:
+      throw new Error('No LLM configured');
+  }
+}
+
+// Cerebras is OpenAI-compatible, so this mirrors the Groq adapter.
+async function cerebrasComplete(prompt: string, config: Config, maxTokens: number): Promise<string> {
+  const resp = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${config.cerebrasApiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.cerebrasModel,
+      temperature: 0.2,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!resp.ok) throw new LLMError(`Cerebras ${resp.status}: ${await resp.text()}`, resp.status);
+  const data: any = await resp.json();
+  return data.choices?.[0]?.message?.content ?? '';
 }
 
 async function geminiComplete(prompt: string, config: Config, maxTokens: number): Promise<string> {
