@@ -285,7 +285,14 @@ async function runFetchForUser(userId: string): Promise<FetchResult> {
   // keyword heuristic rather than spending the operator's quota.
   const { config: llm, hasKey } = await llmConfigForUser(userId, config);
 
-  const toScore = await db.unscoredJobs(userId);
+  // Bounded: see config.maxScorePerRun. The remainder is picked up next tick,
+  // which keeps a big import from eating the budget career-page extraction
+  // needs — extraction produces jobs no other source has.
+  const pending = await db.unscoredJobs(userId);
+  const toScore = pending.slice(0, config.maxScorePerRun);
+  if (pending.length > toScore.length) {
+    console.log(`[score] ${pending.length} unscored; scoring ${toScore.length} this run, rest next tick`);
+  }
   const scored = await scoreAndStore(userId, toScore, profile, llm);
 
   return { sources: gathered.sources, added, scored, total: (await db.allJobs()).length, usedLLM: hasKey };

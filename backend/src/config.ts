@@ -94,6 +94,18 @@ export const config = {
   // and a run that long does not survive a free-tier host. 4 pages is ~60-90s.
   // Budget check: 4 pages x 8 runs/day = 32 Firecrawl credits/day, ~960/month,
   // just inside the 1,000/month free allowance.
+  // Cap on how many jobs one run will score.
+  //
+  // Scoring and career-page extraction draw on the SAME daily LLM budget, and
+  // scoring wins by volume: importing the ATS boards queued 790 jobs, burned
+  // both free tiers in one tick, and the scrape three minutes later got
+  // "every LLM provider is spent" with four pages already fetched.
+  //
+  // That priority is backwards. Extraction needs ~4 requests and yields roles
+  // available nowhere else; scoring needs hundreds and degrades gracefully to
+  // keyword matching. Capping the run leaves headroom for extraction and
+  // spreads a large import over several ticks instead of starving everything.
+  maxScorePerRun: Number(process.env.MAX_SCORE_PER_RUN ?? 150),
   scrapeMaxPagesPerRun: Number(process.env.SCRAPE_MAX_PAGES_PER_RUN ?? 4),
 
   // ---- Auth ----
