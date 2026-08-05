@@ -1,3 +1,4 @@
+import { CAREER_PAGE_TARGETS } from './sources/targets';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -80,7 +81,10 @@ export const config = {
   //
   // Six pages at 4 per run means full coverage every ~4.5 hours instead of 18,
   // and no credits burned on pages that cannot yield.
-  scrapeCareerPages: list(process.env.SCRAPE_CAREER_PAGES, 'https://www.stackbinary.io/careers,https://www.ycombinator.com/jobs,https://unicoconnect.com/careers,https://www.cashfree.com/careers/,https://upstox.com/careers,https://snapmint.com/careers'),
+  // Targets live in sources/targets.ts, not here — the queue in Postgres tracks
+  // when each was last read, so the list only says WHICH urls exist.
+  // SCRAPE_CAREER_PAGES still overrides for a one-off.
+  scrapeCareerPages: list(process.env.SCRAPE_CAREER_PAGES, CAREER_PAGE_TARGETS.join(',')),
   // Career pages are scraped FAR less often than the aggregators are fetched.
   // Firecrawl's free tier is 1000 credits/month and one page costs one credit,
   // so 24 pages on the hourly job schedule would be ~17,000 credits/month and

@@ -75,6 +75,10 @@ export default function Dashboard({
   const [phase, setPhase] = useState<RunPhase>('idle')
   const [note, setNote] = useState<Note | null>(null)
   const [sources, setSources] = useState<SourceInfo | null>(null)
+  // How many roles clear the CURRENT floor on the other dashboard. Shown in the
+  // empty state so "nothing here" never reads as "nothing anywhere" — the most
+  // common confusion when career pages is thin and the boards are full.
+  const [otherCount, setOtherCount] = useState(0)
 
   // Guards against a slow response from the view you just left overwriting the
   // list of the view you are now looking at.
@@ -129,6 +133,17 @@ export default function Dashboard({
       active = false
     }
   }, [jobs.length])
+
+  useEffect(() => {
+    let active = true
+    const load = career
+      ? getJobs(minScore).then((all) => all.filter((j) => j.source !== CAREER_PAGES).length)
+      : getJobs(minScore, CAREER_PAGES).then((l) => l.length)
+    load.then((n) => active && setOtherCount(n)).catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [career, minScore, jobs.length])
 
   useEffect(() => {
     if (!note) return
@@ -343,19 +358,50 @@ export default function Dashboard({
     }
 
     if (minScore > 0 && poolForView > 0) {
+      // Say the NUMBERS. "Nothing scores 50 or higher" on its own reads as
+      // "this feature is broken" when the truth is "19 roles exist and they are
+      // all weak" — and it never mentions that the other dashboard is full,
+      // which is the single most useful thing to know from here.
+      const other = career ? 'API sources' : 'Career pages'
       return (
         <div className="dsh-empty">
           <h3 className="dsh-empty-t">
             Nothing scores <span className="dsh-num">{minScore}</span> or higher
           </h3>
           <p className="dsh-empty-b">
-            {career
-              ? 'There are career-page roles in the pool, but none of them clear your score floor right now. Career pages are a small, slow trickle — it is worth reading the ones that scored lower.'
-              : 'There are board listings in the pool, but none of them clear your score floor. Drop the bar and skim what is underneath, or run a fetch for something newer.'}
+            {career ? (
+              <>
+                There {poolForView === 1 ? 'is' : 'are'}{' '}
+                <span className="dsh-num">{poolForView}</span> career-page{' '}
+                {poolForView === 1 ? 'role' : 'roles'} in the pool and none of them
+                clear <span className="dsh-num">{minScore}</span>. Career pages are a
+                slow trickle by design, so a thin patch is normal — the ones that
+                scored lower are still worth a look.
+              </>
+            ) : (
+              <>
+                There {poolForView === 1 ? 'is' : 'are'}{' '}
+                <span className="dsh-num">{poolForView}</span>{' '}
+                {poolForView === 1 ? 'listing' : 'listings'} in the pool and none clear{' '}
+                <span className="dsh-num">{minScore}</span>. Drop the bar to see what is
+                underneath, or fetch for something newer.
+              </>
+            )}
+          </p>
+          <p className="dsh-empty-b">
+            {otherCount > 0 ? (
+              <>
+                <span className="dsh-num">{otherCount}</span>{' '}
+                {otherCount === 1 ? 'role' : 'roles'} on <strong>{other}</strong> clear{' '}
+                <span className="dsh-num">{minScore}</span> right now.
+              </>
+            ) : (
+              <>Nothing on <strong>{other}</strong> clears it either.</>
+            )}
           </p>
           <div className="dsh-empty-acts">
             <button type="button" className="dsh-btn" onClick={() => setMinScore(0)}>
-              Show every score
+              Show all {poolForView}
             </button>
           </div>
         </div>

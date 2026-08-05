@@ -479,6 +479,17 @@ if (require.main === module) {
       // Keeps the pre-auth data's owner row alive until it is claimed by a real
       // account (see `npm run claim-local`).
       await db.ensureUser(LOCAL_USER_ID, 'local@jobcopilot', 'Local User');
+  // Register the career-page targets. Idempotent: existing rows keep their
+  // history, new urls join the back of the queue, and urls dropped from the
+  // list are disabled rather than deleted so their record survives.
+  const q = await db.syncScrapeTargets(config.scrapeCareerPages).catch((e) => {
+    console.error('could not sync scrape targets:', e.message);
+    return null;
+  });
+  if (q) {
+    const st = await db.scrapeQueueStatus().catch(() => null);
+    if (st) console.log(`Scrape queue: ${st.enabled} targets, ${st.dueNow} due now, ${st.producing} have yielded before.`);
+  }
       console.log(`Database ready. Google sign-in: ${authConfigured(config) ? 'enabled' : 'NOT configured'}`);
       startScheduler();
     } catch (e) {

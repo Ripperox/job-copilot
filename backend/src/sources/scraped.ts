@@ -71,46 +71,30 @@ export async function fetchScrapedJobs(profile: Profile, config: Config): Promis
 
   console.error(`[scraped] ${config.scrapeCareerPages.length} career page(s) configured`);
 
-  // State lives in Postgres, not memory. The host restarts frequently and an
-  // in-memory cursor reset to 0 every time, so the same first pages were read
-  // over and over and the tail of the list was never reached.
-  const state = await db.getScrapeState().catch(() => ({ cursor: 0, lastScrape: 0 }));
-  lastScrapeAt = state.lastScrape;
+  // Pull the next batch off the QUEUE.
+  //
+  // This replaced a single global cursor plus one global cooldown, which
+  // treated every URL identically: a JS-only shell that can never yield got
+  // the same share of the budget as a page returning thirty roles, and one
+  // timestamp gated the whole list. Now each target carries its own due_at and
+  // earns its place — see recordScrapeResult for the backoff.
+  const targets = await db.dueScrapeTargets(config.scrapeMaxPagesPerRun).catch((e) => {
+    console.error('[scraped] could not read the queue:', e.message);
+    return [] as string[];
+  });
 
-  const dueAt = lastScrapeAt + config.scrapeIntervalHours * 60 * 60 * 1000;
-  if (lastScrapeAt && Date.now() < dueAt) {
-    const mins = Math.round((dueAt - Date.now()) / 60000);
-    console.error(`[scraped] skipping — next career-page scrape due in ${mins} min`);
+  if (!targets.length) {
+    console.error('[scraped] nothing due — every target is inside its cooldown');
     return [];
   }
 
-  // Read a rotating WINDOW of the target list rather than all of it.
-  //
-  // The binding constraint is not Firecrawl (1 credit/page) but wall-clock: each
-  // page costs ~7s of pacing plus fetch plus LLM parsing, so reading all 24 in
-  // one run took 465s measured. A run that long does not survive a free-tier
-  // host that restarts on idle, and because nothing is written until the very
-  // end, an interrupted run loses everything it gathered. Small windows finish
-  // and commit; the cursor below carries the rotation across runs.
-  const all = config.scrapeCareerPages;
-  const size = Math.max(1, Math.min(config.scrapeMaxPagesPerRun, all.length));
-  const start = state.cursor % all.length;
-  const targets = Array.from({ length: size }, (_, i) => all[(start + i) % all.length]);
-
-  // Advance the cursor and stamp the run BEFORE doing the work, so a crash
-  // mid-run moves on to the next window instead of retrying the same one
-  // forever and never reaching the rest of the list.
-  lastScrapeAt = Date.now();
-  await db.setScrapeState((start + size) % all.length, lastScrapeAt).catch((e) => {
-    console.error('[scraped] could not persist scrape state:', e.message);
-  });
-
-  if (size < all.length) {
+  const q = await db.scrapeQueueStatus().catch(() => null);
+  if (q) {
     console.error(
-      `[scraped] reading ${size}/${all.length} pages this run (window from #${start}); ` +
-      `full list covered every ${Math.ceil(all.length / size)} runs`,
+      `[scraped] queue: ${q.dueNow} due of ${q.enabled} enabled | ${q.producing} have ever yielded | ${q.neverScraped} never visited`,
     );
   }
+  console.error(`[scraped] taking ${targets.length}: ${targets.map((u) => new URL(u).hostname).join(', ')}`);
 
   // 1. Fetch every page first. This is the cheap half (one Firecrawl credit
   //    each) and is independent of the LLM budget.
@@ -120,18 +104,22 @@ export async function fetchScrapedJobs(profile: Profile, config: Config): Promis
   //    7th page onward. The fallback chain does rescue those via Jina, but
   //    Firecrawl extracts better, so it is worth waiting for.
   const fetched: { url: string; content: string }[] = [];
+  const failures = new Map<string, string>();
   for (const [i, pageUrl] of targets.entries()) {
     if (i > 0) await sleep(FETCH_SPACING_MS);
     try {
       const { result, provider } = await scrapePage(pageUrl, config);
       if (!result.content.trim()) {
         console.error(`[scraped] ${pageUrl} returned no content (via ${provider})`);
+        failures.set(pageUrl, `no content via ${provider}`);
         continue;
       }
       fetched.push({ url: pageUrl, content: result.content });
     } catch (e: any) {
       // One dead career page must never fail the whole run.
-      console.error(`[scraped] ${pageUrl} fetch failed:`, String(e?.message ?? e).slice(0, 160));
+      const msg = String(e?.message ?? e).slice(0, 160);
+      console.error(`[scraped] ${pageUrl} fetch failed:`, msg);
+      failures.set(pageUrl, msg);
     }
   }
 
@@ -139,7 +127,22 @@ export async function fetchScrapedJobs(profile: Profile, config: Config): Promis
   //    Firecrawl — is the binding constraint, and providers cap on requests as
   //    well as tokens. One page per request wasted the request budget exactly
   //    the way one job per request did in the scorer.
-  return extractFromPages(fetched, profile, config);
+  const { jobs, perPage } = await extractFromPages(fetched, profile, config);
+
+  // 3. Tell the queue how each target did. This is what makes the rotation
+  //    adaptive rather than round-robin: a page that yields comes back at the
+  //    base interval, one that does not backs off exponentially. Recording
+  //    happens even on failure — a target that always errors must not stay
+  //    permanently due and starve the ones that work.
+  await Promise.all(
+    targets.map((url) =>
+      db
+        .recordScrapeResult(url, perPage.get(url) ?? 0, config.scrapeIntervalHours, failures.get(url))
+        .catch((e) => console.error(`[scraped] could not record ${url}:`, e.message)),
+    ),
+  );
+
+  return jobs;
 }
 
 // Pages per LLM request, shaped by which limit binds for that provider:
@@ -161,8 +164,9 @@ async function extractFromPages(
   pages: { url: string; content: string }[],
   profile: Profile,
   config: Config,
-): Promise<Job[]> {
-  if (!pages.length || !hasLLM(config)) return [];
+): Promise<{ jobs: Job[]; perPage: Map<string, number> }> {
+  const perPage = new Map<string, number>();
+  if (!pages.length || !hasLLM(config)) return { jobs: [], perPage };
 
   // Same failover discipline as the scorer: one dead free tier must not cost us
   // the whole scrape when another key is configured. Walk the chain, and only
@@ -187,7 +191,11 @@ async function extractFromPages(
     try {
       requests++;
       const found = await extractGroup(group, cfg);
-      for (const [url, rows] of found) jobs.push(...toJobs(rows, url, profile));
+      for (const [url, rows] of found) {
+        const made = toJobs(rows, url, profile);
+        jobs.push(...made);
+        perPage.set(url, (perPage.get(url) ?? 0) + made.length);
+      }
       i += group.length;
     } catch (e: unknown) {
       if (isTerminalForRun(e)) {
@@ -204,7 +212,11 @@ async function extractFromPages(
         try {
           requests++;
           const one = await extractGroup([page], cfg);
-          for (const [url, rows] of one) jobs.push(...toJobs(rows, url, profile));
+          for (const [url, rows] of one) {
+            const made = toJobs(rows, url, profile);
+            jobs.push(...made);
+            perPage.set(url, (perPage.get(url) ?? 0) + made.length);
+          }
         } catch (inner) {
           if (isTerminalForRun(inner)) {
             p++;
@@ -220,7 +232,7 @@ async function extractFromPages(
   console.error(
     `[scraped] ${jobs.length} roles from ${pages.length} pages in ${requests} LLM request(s) via ${used.join(' → ') || 'none'}`,
   );
-  return jobs;
+  return { jobs, perPage };
 }
 
 /**

@@ -385,6 +385,92 @@ export const db = {
     };
   },
 
+  // ---- the scrape queue ----
+
+  /**
+   * Register targets, without disturbing ones already in the queue.
+   *
+   * Runs on every boot so the config list is the source of truth for WHICH
+   * urls exist, while the database stays the source of truth for when each was
+   * last read. Removing a url from config disables rather than deletes it, so
+   * its history survives if it comes back.
+   */
+  async syncScrapeTargets(urls: string[]): Promise<{ added: number; disabled: number }> {
+    if (!urls.length) return { added: 0, disabled: 0 };
+    const values = urls.map((_, i) => `($${i + 1})`).join(',');
+    const { rows } = await query<{ url: string }>(
+      `INSERT INTO scrape_targets (url) VALUES ${values}
+       ON CONFLICT (url) DO UPDATE SET enabled = TRUE
+       RETURNING url`,
+      urls,
+    );
+    const off = await query(
+      `UPDATE scrape_targets SET enabled = FALSE WHERE enabled AND NOT (url = ANY($1::text[]))`,
+      [urls],
+    );
+    return { added: rows.length, disabled: off.rowCount ?? 0 };
+  },
+
+  /** The next N targets that are actually due, least recently scraped first. */
+  async dueScrapeTargets(limit: number): Promise<string[]> {
+    const { rows } = await query<{ url: string }>(
+      `SELECT url FROM scrape_targets
+       WHERE enabled AND due_at <= now()
+       ORDER BY last_scraped_at ASC NULLS FIRST, due_at ASC
+       LIMIT $1`,
+      [limit],
+    );
+    return rows.map((r) => r.url);
+  },
+
+  /**
+   * Record what a target produced and schedule its next visit.
+   *
+   * Yielded roles → come back after the base interval. Empty or errored →
+   * back off 2^n, capped, so a page that cannot yield stops competing for the
+   * budget with pages that can, but is never permanently dropped.
+   */
+  async recordScrapeResult(
+    url: string,
+    roles: number,
+    baseHours: number,
+    error?: string,
+  ): Promise<void> {
+    const MAX_BACKOFF_STEPS = 5; // base * 32; at 3h that is ~4 days
+    await query(
+      `UPDATE scrape_targets SET
+         last_scraped_at   = now(),
+         last_roles        = $2,
+         total_roles       = total_roles + $2,
+         consecutive_empty = CASE WHEN $2 > 0 THEN 0 ELSE LEAST(consecutive_empty + 1, $4) END,
+         last_error        = $5,
+         due_at            = now() + (
+           $3::float * POWER(2, CASE WHEN $2 > 0 THEN 0 ELSE LEAST(consecutive_empty + 1, $4) END)
+         ) * INTERVAL '1 hour'
+       WHERE url = $1`,
+      [url, roles, baseHours, MAX_BACKOFF_STEPS, error ?? null],
+    );
+  },
+
+  /** Operator view of the queue — what is due, what is starved, what is dead. */
+  async scrapeQueueStatus(): Promise<{
+    total: number; enabled: number; dueNow: number; neverScraped: number; producing: number;
+  }> {
+    const { rows } = await query<Record<string, string>>(
+      `SELECT count(*)::int AS total,
+              count(*) FILTER (WHERE enabled)::int AS enabled,
+              count(*) FILTER (WHERE enabled AND due_at <= now())::int AS due_now,
+              count(*) FILTER (WHERE last_scraped_at IS NULL)::int AS never_scraped,
+              count(*) FILTER (WHERE total_roles > 0)::int AS producing
+       FROM scrape_targets`,
+    );
+    const r = rows[0];
+    return {
+      total: Number(r.total), enabled: Number(r.enabled), dueNow: Number(r.due_now),
+      neverScraped: Number(r.never_scraped), producing: Number(r.producing),
+    };
+  },
+
   async setScrapeState(cursor: number, lastScrape: number): Promise<void> {
     await query(
       `INSERT INTO scrape_state (id, cursor, last_scrape)

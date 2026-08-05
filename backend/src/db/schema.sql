@@ -98,6 +98,32 @@ CREATE TABLE IF NOT EXISTS scrape_state (
 );
 INSERT INTO scrape_state (id, cursor) VALUES (1, 0) ON CONFLICT (id) DO NOTHING;
 
+-- The scrape queue: one row per target, replacing the single global cursor.
+--
+-- A shared cursor treated every URL identically — a JS-only shell that can
+-- never yield got exactly as much of the budget as a page returning 30 roles,
+-- and one global cooldown gated the whole list. Per-URL state fixes both:
+-- pick the least-recently-scraped targets that are actually due, and let each
+-- one earn or lose its place.
+--
+-- due_at is the scheduling primitive. On a successful scrape with roles it is
+-- pushed out by the base interval; on an empty or failed one it backs off
+-- exponentially (capped), so dead targets drift to the back of the queue
+-- without ever being deleted — a company with no openings this month should
+-- come back later, not be lost.
+CREATE TABLE IF NOT EXISTS scrape_targets (
+  url               TEXT PRIMARY KEY,
+  enabled           BOOLEAN     NOT NULL DEFAULT TRUE,
+  last_scraped_at   TIMESTAMPTZ,
+  due_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_roles        INTEGER     NOT NULL DEFAULT 0,
+  total_roles       INTEGER     NOT NULL DEFAULT 0,
+  consecutive_empty INTEGER     NOT NULL DEFAULT 0,
+  last_error        TEXT
+);
+-- The queue read is "what is due, oldest first" — index it.
+CREATE INDEX IF NOT EXISTS scrape_targets_due_idx ON scrape_targets (due_at) WHERE enabled;
+
 CREATE INDEX IF NOT EXISTS scores_user_score_idx    ON scores (user_id, score DESC);
 CREATE INDEX IF NOT EXISTS job_meta_user_status_idx ON job_meta (user_id, status);
 CREATE INDEX IF NOT EXISTS jobs_created_at_idx      ON jobs (created_at DESC);
