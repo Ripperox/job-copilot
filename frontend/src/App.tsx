@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { Health, User } from './api'
-import { API, getHealth, getMe, getSources, logout } from './api'
+import { API, getHealth, getJobs, getMe, logout } from './api'
 import ProfileView from './components/ProfileView'
 import Dashboard from './components/Dashboard'
 import SignIn from './components/SignIn'
@@ -122,22 +122,22 @@ export default function App() {
     }
   }, [])
 
-  // Career pages leads by design — those roles are the differentiated ones. But
-  // landing on an empty dashboard is the worst possible first screen, and that
-  // tab stays empty until the server has career-page URLs configured. So: check
-  // once, and fall back to job boards when there is genuinely nothing to show.
+  // Land on the tab that has something worth reading.
+  //
+  // Career pages leads by design — those roles are the differentiated ones —
+  // but design intent is not what the user should be shown on arrival. This
+  // first checked only whether career pages was EMPTY, which was too weak: 19
+  // career-page roles all scoring 5 is not empty, so it opened on a dashboard
+  // reading "Nothing scores 50 or higher" while 1,700 board jobs with real
+  // matches sat one tab away. Compare what actually clears the score floor.
   useEffect(() => {
     if (!user) return
     let active = true
-    getSources()
-      .then((s) => {
+    Promise.all([getJobs(50, 'scraped'), getJobs(50)])
+      .then(([career, all]) => {
         if (!active) return
-        const career = s.sources.find((x) => x.name === 'scraped')?.count ?? 0
-        const boards = s.sources.reduce(
-          (n, x) => n + (x.name === 'scraped' ? 0 : x.count),
-          0,
-        )
-        if (career === 0 && boards > 0) setTab('job-boards')
+        const boards = all.filter((j) => j.source !== 'scraped').length
+        if (career.length === 0 && boards > 0) setTab('job-boards')
       })
       .catch(() => undefined)
     return () => {
