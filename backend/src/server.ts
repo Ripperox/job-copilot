@@ -1,4 +1,7 @@
 import express from 'express';
+import helmet from 'helmet';
+import compression from 'compression';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import * as crypto from 'crypto';
@@ -24,12 +27,79 @@ const app = express();
 // Without this, Express sees an insecure connection and refuses to set Secure
 // cookies, which silently breaks sign-in in production.
 if (config.isProduction) app.set('trust proxy', 1);
+
+// Security headers. A black-box scan found none of these present and
+// X-Powered-By announcing Express, which is free reconnaissance for anyone
+// probing. CSP is off: this process serves JSON only, the frontend is on
+// Vercel, and a policy here would protect nothing while being easy to get
+// subtly wrong.
+app.disable('x-powered-by');
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' }, // the SPA is a different origin
+    hsts: config.isProduction ? { maxAge: 15552000, includeSubDomains: true } : false,
+  }),
+);
+
+// gzip/brotli. /api/jobs was measured at 7.71MB uncompressed; JSON this
+// repetitive compresses by roughly 10x, and on a free-tier host bandwidth and
+// time-to-first-byte are the constraint, not CPU.
+app.use(compression());
+
 // Cookies need an explicit origin and credentials:true — a wildcard origin would
 // make the browser drop the session cookie.
-app.use(cors({ origin: config.frontendOrigins, credentials: true }));
+app.use(
+  cors({
+    origin: config.frontendOrigins,
+    credentials: true,
+    // Without this the browser hides x-total-count from cross-origin JS, so the
+    // client cannot tell a full page from a truncated one.
+    exposedHeaders: ['x-total-count', 'x-request-id'],
+  }),
+);
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
+
+// Correlation id on every request and its log lines, so a report of "it failed
+// at 20:09" can be traced to one request instead of grepping by timestamp.
+app.use((req, res, next) => {
+  const id = (req.headers['x-request-id'] as string) || crypto.randomUUID().slice(0, 8);
+  (req as express.Request & { id: string }).id = id;
+  res.setHeader('x-request-id', id);
+  const started = Date.now();
+  res.on('finish', () => {
+    // Only the slow and the failed — logging every 200 buries the signal.
+    const ms = Date.now() - started;
+    if (res.statusCode >= 400 || ms > 1000) {
+      console.log(`[${id}] ${req.method} ${req.path} ${res.statusCode} ${ms}ms`);
+    }
+  });
+  next();
+});
+
 app.use(attachUser);
+
+// Rate limits, tightest where the work is most expensive. /fetch and /rescore
+// each spend real money-equivalent quota (Firecrawl credits, LLM tokens), so a
+// stuck retry loop or an impatient double-click must not be able to drain a
+// day's budget in a minute.
+const limit = (windowMs: number, max: number, message: string) =>
+  rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    // Per user when signed in, per IP otherwise — keying on IP alone would let
+    // one office network exhaust everyone's allowance.
+    keyGenerator: (req) => (req as express.Request & { userId?: string }).userId ?? ipKeyGenerator(req.ip ?? ""),
+    message: { error: message },
+  });
+
+app.use('/api/', limit(60_000, 120, 'Too many requests. Wait a moment and try again.'));
+app.use('/api/fetch', limit(10 * 60_000, 6, 'Fetches are limited to 6 per 10 minutes — each one spends scraping and model quota.'));
+app.use('/api/rescore', limit(60 * 60_000, 4, 'Re-scoring is limited to 4 per hour — it re-reads every job in your pool.'));
+app.use('/api/auth/google', limit(15 * 60_000, 20, 'Too many sign-in attempts. Try again shortly.'));
 
 // Render polls this as the health check, so it must actually prove the process
 // is usable — a server that booted but cannot reach Postgres is not healthy.
@@ -322,18 +392,37 @@ app.post('/api/rescore', async (req, res) => {
   res.json({ rescored, usedLLM: hasKey });
 });
 
-// List scored jobs, filtered by minimum score, best first (SQL does the sort).
-// Dismissed jobs are hidden unless ?includeDismissed=true.
+// List scored jobs, best first.
+//
+// Every filter is applied in SQL. This used to load the user's ENTIRE pool and
+// filter in JavaScript: measured at 1,724 rows, a 6.5s query and a 7.71MB
+// response, of which 85% was job descriptions the list view never renders.
+// Descriptions are truncated to a snippet here; the full text comes from
+// GET /api/jobs/:id when a card is opened.
 app.get('/api/jobs', async (req, res) => {
-  const minScore = Number(req.query.minScore) || 0;
+  const n = (v: unknown, dflt: number, lo: number, hi: number) => {
+    const x = Number(v);
+    return Number.isFinite(x) ? Math.min(hi, Math.max(lo, Math.trunc(x))) : dflt;
+  };
+  const minScore = n(req.query.minScore, 0, 0, 100);
+  const limit = n(req.query.limit, 200, 1, 500);
+  const offset = n(req.query.offset, 0, 0, 1_000_000);
   const includeDismissed = req.query.includeDismissed === 'true';
-  // ?source=scraped powers the career-pages dashboard; omit for everything.
-  const source = typeof req.query.source === 'string' ? req.query.source : '';
-  const jobs = (await db.scoredJobs(req.userId!))
-    .filter((j) => (j.score ?? 0) >= minScore)
-    .filter((j) => includeDismissed || !j.dismissed)
-    .filter((j) => !source || j.source === source);
+  const source = typeof req.query.source === 'string' ? req.query.source.slice(0, 40) : '';
+
+  const { jobs, total } = await db.listScoredJobs(req.userId!, {
+    minScore, source, includeDismissed, limit, offset,
+  });
+  // Total is returned so the client can paginate without a second round trip.
+  res.setHeader('x-total-count', String(total));
   res.json(jobs);
+});
+
+// Full record for one job, including the description the list omits.
+app.get('/api/jobs/:id', async (req, res) => {
+  const job = await db.getScoredJob(req.userId!, req.params.id);
+  if (!job) return res.status(404).json({ error: 'not found' });
+  res.json(job);
 });
 
 // Which job sources currently have jobs in the pool, and how many. Drives the

@@ -136,8 +136,8 @@ export default function App() {
     Promise.all([getJobs(50, 'scraped'), getJobs(50)])
       .then(([career, all]) => {
         if (!active) return
-        const boards = all.filter((j) => j.source !== 'scraped').length
-        if (career.length === 0 && boards > 0) setTab('job-boards')
+        const boards = all.jobs.filter((j) => j.source !== 'scraped').length
+        if (career.jobs.length === 0 && boards > 0) setTab('job-boards')
       })
       .catch(() => undefined)
     return () => {

@@ -510,6 +510,61 @@ export const db = {
     return rows.map(toScoredJob);
   },
 
+  /**
+   * The dashboard list, filtered, sorted, paginated and trimmed in SQL.
+   *
+   * Replaces "load every row, filter in JS": 1,724 rows, 6.5s, 7.71MB — of
+   * which 6.5MB was descriptions the list never shows. The snippet keeps cards
+   * useful; the full text is one getScoredJob away when a card is opened.
+   */
+  async listScoredJobs(
+    userId: string,
+    opts: { minScore: number; source: string; includeDismissed: boolean; limit: number; offset: number },
+  ): Promise<{ jobs: ScoredJob[]; total: number }> {
+    const where: string[] = [];
+    const params: unknown[] = [userId];
+    if (opts.minScore > 0) {
+      params.push(opts.minScore);
+      where.push(`COALESCE(s.score, 0) >= $${params.length}`);
+    }
+    if (opts.source) {
+      params.push(opts.source);
+      where.push(`j.source = $${params.length}`);
+    }
+    if (!opts.includeDismissed) where.push('COALESCE(m.dismissed, FALSE) = FALSE');
+    const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    const joins = `FROM jobs j
+      LEFT JOIN scores   s ON s.job_id = j.id AND s.user_id = $1
+      LEFT JOIN job_meta m ON m.job_id = j.id AND m.user_id = $1
+      ${clause}`;
+
+    // ONE round trip, not two. EXPLAIN puts the query itself at ~1.5ms while a
+    // round trip to Neon measures ~209ms, so latency — not Postgres — is the
+    // cost, and a separate COUNT would double it for a number we can get from
+    // a window function on the same scan.
+    const paged = [...params, opts.limit, opts.offset];
+    const { rows } = await query<ScoredJobRow & { total: string }>(
+      `SELECT j.id, j.source, j.title, j.company, j.location, j.url, j.salary,
+              j.posted_at, j.created_at,
+              LEFT(j.description, 400) AS description,
+              s.score, s.reason, s.cv_variant,
+              m.status, m.notes, m.dismissed,
+              count(*) OVER ()::int AS total
+       ${joins}
+       ORDER BY s.score DESC NULLS LAST, j.id
+       LIMIT $${paged.length - 1} OFFSET $${paged.length}`,
+      paged,
+    );
+
+    return {
+      jobs: rows.map(toScoredJob),
+      // count(*) OVER () counts the filtered set before LIMIT. With no rows
+      // there is no window to read it from, which is correct: total is 0.
+      total: rows.length ? Number(rows[0].total) : 0,
+    };
+  },
+
   async getScoredJob(userId: string, jobId: string): Promise<ScoredJob | undefined> {
     const { rows } = await query<ScoredJobRow>(
       `${SCORED_JOB_SELECT} WHERE j.id = $2`,

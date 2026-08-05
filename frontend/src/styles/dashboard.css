@@ -1094,3 +1094,13 @@
     opacity: 0.5;
   }
 }
+
+/* Page-cap notice: present but quiet — it is context, not a warning. */
+.dsh-capped {
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  font-size: 0.85rem;
+}

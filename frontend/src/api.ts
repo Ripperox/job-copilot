@@ -116,6 +116,30 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return rawRequest<T>(path, init)
 }
 
+/** Like request(), but also hands back the response headers (x-total-count). */
+async function requestWithHeaders<T>(
+  path: string,
+): Promise<{ data: T; headers: Headers }> {
+  return dedupe(`H:${path}`, async () => {
+    const res = await fetch(`${API}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+    if (res.status === 401) throw new UnauthorizedError()
+    if (!res.ok) {
+      let detail = ''
+      try {
+        detail = await res.text()
+      } catch {
+        detail = ''
+      }
+      throw new Error(`Request failed (${res.status})${detail ? `: ${detail.slice(0, 200)}` : ''}`)
+    }
+    const text = await res.text()
+    return { data: (text ? JSON.parse(text) : null) as T, headers: res.headers }
+  })
+}
+
 async function rawRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -223,10 +247,26 @@ export function rescoreJobs(): Promise<RescoreResult> {
   return request<RescoreResult>('/rescore', { method: 'POST' })
 }
 
-export function getJobs(minScore: number, source = ''): Promise<ScoredJob[]> {
-  const q = new URLSearchParams({ minScore: String(minScore) })
+export interface JobPage {
+  jobs: ScoredJob[]
+  /** Rows matching the filter server-side, which may exceed those returned. */
+  total: number
+}
+
+/**
+ * One page of scored jobs.
+ *
+ * The server caps a page and reports the true match count in x-total-count, so
+ * the UI can say "showing 200 of 1,724" instead of silently truncating. The
+ * list no longer carries full descriptions — the endpoint sends a 400-char
+ * snippet, and nothing in the list view renders them anyway.
+ */
+export async function getJobs(minScore: number, source = '', limit = 300): Promise<JobPage> {
+  const q = new URLSearchParams({ minScore: String(minScore), limit: String(limit) })
   if (source) q.set('source', source)
-  return request<ScoredJob[]>(`/jobs?${q}`)
+  const { data, headers } = await requestWithHeaders<ScoredJob[]>(`/jobs?${q}`)
+  const total = Number(headers.get('x-total-count'))
+  return { jobs: data, total: Number.isFinite(total) && total > 0 ? total : data.length }
 }
 
 export interface SourceInfo {

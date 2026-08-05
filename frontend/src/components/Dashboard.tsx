@@ -79,6 +79,8 @@ export default function Dashboard({
   // empty state so "nothing here" never reads as "nothing anywhere" — the most
   // common confusion when career pages is thin and the boards are full.
   const [otherCount, setOtherCount] = useState(0)
+  // Rows matching the filter on the server, which can exceed those returned.
+  const [matchTotal, setMatchTotal] = useState(0)
 
   // Guards against a slow response from the view you just left overwriting the
   // list of the view you are now looking at.
@@ -92,11 +94,13 @@ export default function Dashboard({
       try {
         // getJobs takes one source, so career pages filter server-side and the
         // boards view subtracts them client-side.
-        const list = career
-          ? await getJobs(score, CAREER_PAGES)
-          : (await getJobs(score)).filter((j) => j.source !== CAREER_PAGES)
+        const page = career ? await getJobs(score, CAREER_PAGES) : await getJobs(score)
+        const list = career ? page.jobs : page.jobs.filter((j) => j.source !== CAREER_PAGES)
         if (id !== reqId.current) return
         setJobs(list)
+        // The server caps a page; show the true match count so a capped list
+        // never silently looks like the whole set.
+        setMatchTotal(career ? page.total : page.total - (page.jobs.length - list.length))
       } catch (err: unknown) {
         if (err instanceof UnauthorizedError) {
           onUnauthorized?.()
@@ -137,8 +141,8 @@ export default function Dashboard({
   useEffect(() => {
     let active = true
     const load = career
-      ? getJobs(minScore).then((all) => all.filter((j) => j.source !== CAREER_PAGES).length)
-      : getJobs(minScore, CAREER_PAGES).then((l) => l.length)
+      ? getJobs(minScore).then((p) => p.jobs.filter((j) => j.source !== CAREER_PAGES).length)
+      : getJobs(minScore, CAREER_PAGES).then((p) => p.jobs.length)
     load.then((n) => active && setOtherCount(n)).catch(() => undefined)
     return () => {
       active = false
@@ -478,6 +482,9 @@ export default function Dashboard({
 
   // ---- the list ----
 
+  // Say so when the server capped the page. A list that silently stops at 300
+  // of 1,724 is worse than one that admits it.
+  const capped = matchTotal > jobs.length
   let listRegion: ReactNode
   if (loading) {
     listRegion = <DashSkeleton rows={career ? 3 : 5} />
@@ -617,6 +624,13 @@ export default function Dashboard({
                     {STATUS_LABELS[statusFilter].toLowerCase()}
                   </>
                 )}
+              </p>
+            )}
+            {capped && (
+              <p className="dsh-capped" role="status">
+                Showing <span className="dsh-num">{jobs.length}</span> of{' '}
+                <span className="dsh-num">{matchTotal}</span> matches — raise the score
+                floor to narrow it.
               </p>
             )}
             {listRegion}
