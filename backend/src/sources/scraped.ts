@@ -10,6 +10,8 @@ import {
   terminalReason,
   llmProviderChain,
   configForProvider,
+  LLMError,
+  MAX_WAIT_MS,
 } from '../llm';
 
 // Company career pages as a job source.
@@ -127,7 +129,7 @@ export async function fetchScrapedJobs(profile: Profile, config: Config): Promis
   //    Firecrawl — is the binding constraint, and providers cap on requests as
   //    well as tokens. One page per request wasted the request budget exactly
   //    the way one job per request did in the scorer.
-  const { jobs, perPage } = await extractFromPages(fetched, profile, config);
+  const { jobs, perPage, starved } = await extractFromPages(fetched, profile, config);
 
   // 3. Tell the queue how each target did. This is what makes the rotation
   //    adaptive rather than round-robin: a page that yields comes back at the
@@ -135,11 +137,22 @@ export async function fetchScrapedJobs(profile: Profile, config: Config): Promis
   //    happens even on failure — a target that always errors must not stay
   //    permanently due and starve the ones that work.
   await Promise.all(
-    targets.map((url) =>
-      db
-        .recordScrapeResult(url, perPage.get(url) ?? 0, config.scrapeIntervalHours, failures.get(url))
-        .catch((e) => console.error(`[scraped] could not record ${url}:`, e.message)),
-    ),
+    targets.map((url) => {
+      const roles = perPage.get(url) ?? 0;
+      // A target that was fetched fine but never parsed — because OUR model
+      // budget ran out — has done nothing wrong. Backing it off would push a
+      // good page to the back of a four-day queue for our failure, and on a
+      // day when quota is tight that would quietly poison the whole list.
+      // Requeue it soon instead, without touching its empty-streak.
+      if (starved && roles === 0 && !failures.has(url)) {
+        return db
+          .requeueScrapeTarget(url, 0.5)
+          .catch((e) => console.error(`[scraped] could not requeue ${url}:`, e.message));
+      }
+      return db
+        .recordScrapeResult(url, roles, config.scrapeIntervalHours, failures.get(url))
+        .catch((e) => console.error(`[scraped] could not record ${url}:`, e.message));
+    }),
   );
 
   return jobs;
@@ -150,6 +163,18 @@ export async function fetchScrapedJobs(profile: Profile, config: Config): Promis
 //   groq   — token-limited (12k/min), so one page at a time is already near the
 //            ceiling; batching there would only cause 413s
 //   anthropic — comfortable either way
+// Gap between extraction requests. Groq allows ~12k tokens/minute and one page
+// is ~3k, so four requests back-to-back trip it instantly — which is exactly
+// what happened: 30 targets produced 0 roles because the first 429 retired the
+// provider on every window. Pacing prevents the 429 rather than reacting to it.
+const EXTRACT_SPACING_MS: Record<string, number> = {
+  groq: 16_000, // token bucket refills in ~15s
+  gemini: 2_000, // request-limited, not token-limited
+  cerebras: 2_200,
+  anthropic: 1_000,
+  heuristic: 0,
+};
+
 const PAGES_PER_REQUEST: Record<string, number> = {
   // One page is ~3k tokens, which with the prompt already fills most of
   // Cerebras' ~8k free-tier context window.
@@ -164,9 +189,9 @@ async function extractFromPages(
   pages: { url: string; content: string }[],
   profile: Profile,
   config: Config,
-): Promise<{ jobs: Job[]; perPage: Map<string, number> }> {
+): Promise<{ jobs: Job[]; perPage: Map<string, number>; starved: boolean }> {
   const perPage = new Map<string, number>();
-  if (!pages.length || !hasLLM(config)) return { jobs: [], perPage };
+  if (!pages.length || !hasLLM(config)) return { jobs: [], perPage, starved: !hasLLM(config) };
 
   // Same failover discipline as the scorer: one dead free tier must not cost us
   // the whole scrape when another key is configured. Walk the chain, and only
@@ -176,10 +201,15 @@ async function extractFromPages(
   const jobs: Job[] = [];
   let requests = 0;
   const used: string[] = [];
+  // One wait per provider per run — enough to clear a token bucket, not enough
+  // to sit in a loop against a daily quota.
+  const waited = new Set<string>();
+  let starved = false;
 
   for (let i = 0; i < pages.length; ) {
     if (p >= order.length) {
       console.error('[scraped] every LLM provider is spent — stopping extraction for this run');
+      starved = true;
       break;
     }
     const provider = order[p];
@@ -189,6 +219,10 @@ async function extractFromPages(
     const group = pages.slice(i, i + per);
 
     try {
+      if (requests > 0) {
+        const gap = EXTRACT_SPACING_MS[provider] ?? 1_000;
+        if (gap) await sleep(gap);
+      }
       requests++;
       const found = await extractGroup(group, cfg);
       for (const [url, rows] of found) {
@@ -199,8 +233,18 @@ async function extractFromPages(
       i += group.length;
     } catch (e: unknown) {
       if (isTerminalForRun(e)) {
+        // A 429 is two different situations. If the provider tells us the wait
+        // is short, sit it out and keep the key we already have — retiring on a
+        // per-minute bucket throws away a working provider for the whole run.
+        const wait = e instanceof LLMError ? e.retryAfterMs : undefined;
+        if (e instanceof LLMError && e.status === 429 && wait !== undefined && wait <= MAX_WAIT_MS && !waited.has(provider)) {
+          waited.add(provider);
+          console.error(`[scraped] ${provider} rate limited, waiting ${Math.ceil(wait / 1000)}s and retrying`);
+          await sleep(wait + 1_000);
+          continue; // same pages, same provider
+        }
         console.error(
-          `[scraped] ${provider} ${terminalReason(e)} — ${order[p + 1] ? `switching to ${order[p + 1]}` : 'no providers left'}`,
+          `[scraped] ${provider} ${terminalReason(e)}${wait ? ` (retry-after ${Math.ceil(wait / 1000)}s)` : ''} — ${order[p + 1] ? `switching to ${order[p + 1]}` : 'no providers left'}`,
         );
         p++;
         continue; // same pages, next provider
@@ -232,7 +276,7 @@ async function extractFromPages(
   console.error(
     `[scraped] ${jobs.length} roles from ${pages.length} pages in ${requests} LLM request(s) via ${used.join(' → ') || 'none'}`,
   );
-  return { jobs, perPage };
+  return { jobs, perPage, starved };
 }
 
 /**

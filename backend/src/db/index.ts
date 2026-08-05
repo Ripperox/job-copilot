@@ -452,6 +452,22 @@ export const db = {
     );
   },
 
+  /**
+   * Put a target back in the queue shortly, WITHOUT counting it as empty.
+   *
+   * For when a page was fetched successfully but never parsed because our own
+   * LLM budget ran out. Penalising it would be blaming the target for our
+   * failure, and on a tight-quota day that would back off the entire list.
+   */
+  async requeueScrapeTarget(url: string, hours: number): Promise<void> {
+    await query(
+      `UPDATE scrape_targets
+         SET due_at = now() + ($2::float * INTERVAL '1 hour')
+       WHERE url = $1`,
+      [url, hours],
+    );
+  },
+
   /** Operator view of the queue — what is due, what is starved, what is dead. */
   async scrapeQueueStatus(): Promise<{
     total: number; enabled: number; dueNow: number; neverScraped: number; producing: number;

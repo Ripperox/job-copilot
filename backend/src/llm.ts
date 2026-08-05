@@ -5,11 +5,37 @@ export type LLMProvider = 'cerebras' | 'gemini' | 'groq' | 'anthropic' | 'heuris
 // Carries the provider's HTTP status so callers can tell "this key is wrong"
 // (401/403) from "this key is fine but out of quota right now" (429).
 export class LLMError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+    /**
+     * How long the provider says to wait, in ms, when it tells us.
+     *
+     * This matters because a 429 is two different situations wearing the same
+     * status code. Groq's per-minute token bucket refills in ~15s — waiting is
+     * exactly right and abandoning the provider throws away a working key. Its
+     * daily budget resets in hours — waiting is pointless and moving to the
+     * next provider is right. Only retry-after can tell them apart.
+     */
+    readonly retryAfterMs?: number,
+  ) {
     super(message);
     this.name = 'LLMError';
   }
 }
+
+/** Parse Retry-After (seconds, or an HTTP date) into ms. */
+export function retryAfterMs(resp: Response): number | undefined {
+  const raw = resp.headers.get('retry-after');
+  if (!raw) return undefined;
+  const secs = Number(raw);
+  if (Number.isFinite(secs)) return Math.max(0, secs * 1000);
+  const when = Date.parse(raw);
+  return Number.isFinite(when) ? Math.max(0, when - Date.now()) : undefined;
+}
+
+/** A pause we are willing to sit through mid-run rather than switch provider. */
+export const MAX_WAIT_MS = 45_000;
 
 export function isRateLimit(e: unknown): boolean {
   return e instanceof LLMError && e.status === 429;
@@ -139,7 +165,7 @@ async function cerebrasComplete(prompt: string, config: Config, maxTokens: numbe
       messages: [{ role: 'user', content: prompt }],
     }),
   });
-  if (!resp.ok) throw new LLMError(`Cerebras ${resp.status}: ${await resp.text()}`, resp.status);
+  if (!resp.ok) throw new LLMError(`Cerebras ${resp.status}: ${await resp.text()}`, resp.status, retryAfterMs(resp));
   const data: any = await resp.json();
   return data.choices?.[0]?.message?.content ?? '';
 }
@@ -163,7 +189,7 @@ async function geminiComplete(prompt: string, config: Config, maxTokens: number)
       },
     }),
   });
-  if (!resp.ok) throw new LLMError(`Gemini ${resp.status}: ${await resp.text()}`, resp.status);
+  if (!resp.ok) throw new LLMError(`Gemini ${resp.status}: ${await resp.text()}`, resp.status, retryAfterMs(resp));
   const data: any = await resp.json();
   // A response can hold several parts (e.g. a thought part + the text part); join
   // every part that carries text so we never drop the answer.
@@ -185,7 +211,7 @@ async function groqComplete(prompt: string, config: Config, maxTokens: number): 
       messages: [{ role: 'user', content: prompt }],
     }),
   });
-  if (!resp.ok) throw new LLMError(`Groq ${resp.status}: ${await resp.text()}`, resp.status);
+  if (!resp.ok) throw new LLMError(`Groq ${resp.status}: ${await resp.text()}`, resp.status, retryAfterMs(resp));
   const data: any = await resp.json();
   return data.choices?.[0]?.message?.content ?? '';
 }
@@ -204,7 +230,7 @@ async function anthropicComplete(prompt: string, config: Config, maxTokens: numb
       messages: [{ role: 'user', content: prompt }],
     }),
   });
-  if (!resp.ok) throw new LLMError(`Anthropic ${resp.status}: ${await resp.text()}`, resp.status);
+  if (!resp.ok) throw new LLMError(`Anthropic ${resp.status}: ${await resp.text()}`, resp.status, retryAfterMs(resp));
   const data: any = await resp.json();
   return data.content?.[0]?.text ?? '';
 }
