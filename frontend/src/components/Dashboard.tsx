@@ -57,9 +57,12 @@ function hostOf(url: string): string | null {
 export default function Dashboard({
   view,
   onUnauthorized,
+  onSwitchView,
 }: {
   view: 'career-pages' | 'job-boards'
   onUnauthorized?: () => void
+  /** Jump to the other dashboard — used by the empty state's cross-reference. */
+  onSwitchView?: (view: 'career-pages' | 'job-boards') => void
 }) {
   const career = view === 'career-pages'
   const uid = useId()
@@ -164,6 +167,11 @@ export default function Dashboard({
 
   const handleDismissed = useCallback((id: string) => {
     setJobs((prev) => prev.filter((j) => j.id !== id))
+    // Keep the server-side match total in step. Without this the "showing N of
+    // M" notice fired the moment you dismissed anything: dismissing one of ten
+    // gave "Showing 9 of 10 matches — raise the score floor to narrow it",
+    // which is both wrong and useless advice.
+    setMatchTotal((n) => Math.max(0, n - 1))
   }, [])
 
   async function handleFetch() {

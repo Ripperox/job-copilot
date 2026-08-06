@@ -1052,3 +1052,14 @@
     display: none;
   }
 }
+
+/* The primary action inside an empty state. Used when the useful next step is
+   somewhere else — telling someone where the jobs are and leaving them to find
+   the tab is not help. */
+.dsh-btn-primary {
+  background: var(--accent, #6366f1);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 500;
+}
+.dsh-btn-primary:hover { filter: brightness(1.08); }

@@ -329,7 +329,12 @@ export default function App() {
           {tab === 'profile' ? (
             <ProfileView onUnauthorized={onUnauthorized} onAccountDeleted={onSignOut} />
           ) : (
-            <Dashboard key={tab} view={tab} onUnauthorized={onUnauthorized} />
+            <Dashboard
+              key={tab}
+              view={tab}
+              onUnauthorized={onUnauthorized}
+              onSwitchView={goTo}
+            />
           )}
         </div>
       </main>
