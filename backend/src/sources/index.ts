@@ -9,6 +9,7 @@ import { fetchJSearchJobs } from './jsearch';
 import { fetchJoobleJobs } from './jooble';
 import { fetchFantasticJobs } from './fantastic';
 import { fetchScrapedJobs } from './scraped';
+import * as health from '../health';
 
 // Aggregates all configured job sources. Falls back to the mock set so the app
 // is usable with zero API keys. New sources (Greenhouse, Lever, ...) plug in here.
@@ -83,8 +84,12 @@ export async function gatherJobs(profile: Profile, config: Config): Promise<{ jo
       jobs.push(...outcome.value);
       sources.push(`${label}(${outcome.value.length})`);
       gotReal = true;
+      void health.recordOk(label, 'job', outcome.value.length);
     } else {
-      console.error(`${label} source failed:`, String(outcome.reason?.message ?? outcome.reason).slice(0, 200));
+      const msg = String(outcome.reason?.message ?? outcome.reason).slice(0, 200);
+      console.error(`${label} source failed:`, msg);
+      // Surface it in the product, not just in stderr where nobody looks.
+      void health.recordFailure(label, 'job', msg);
     }
   });
   console.log(`[sources] ${tasks.length} sources in parallel, ${jobs.length} jobs, ${Date.now() - started}ms`);

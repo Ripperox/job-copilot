@@ -98,6 +98,25 @@ CREATE TABLE IF NOT EXISTS scrape_state (
 );
 INSERT INTO scrape_state (id, cursor) VALUES (1, 0) ON CONFLICT (id) DO NOTHING;
 
+-- Per-source health, so the app can say WHY the pool stopped growing.
+--
+-- Three job sources sat monthly-quota-dead for hours while the dashboard
+-- happily showed a stale pool and said nothing. Errors went to stderr, which
+-- nobody reads. A source that has stopped working should be visible in the
+-- product, not discoverable by tailing logs.
+--
+-- Persisted rather than in-memory because the host restarts constantly, and a
+-- health panel that forgets everything on deploy is worse than none.
+CREATE TABLE IF NOT EXISTS source_health (
+  name        TEXT PRIMARY KEY,
+  kind        TEXT        NOT NULL,          -- job | llm | scraper
+  state       TEXT        NOT NULL,          -- ok | quota | auth | error | idle
+  detail      TEXT,
+  items       INTEGER     NOT NULL DEFAULT 0,
+  retry_after TIMESTAMPTZ,
+  checked_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- The scrape queue: one row per target, replacing the single global cursor.
 --
 -- A shared cursor treated every URL identically — a JS-only shell that can

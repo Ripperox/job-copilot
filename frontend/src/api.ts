@@ -269,6 +269,41 @@ export async function getJobs(minScore: number, source = '', limit = 300): Promi
   return { jobs: data, total: Number.isFinite(total) && total > 0 ? total : data.length }
 }
 
+export interface HealthRow {
+  name: string
+  configured: boolean
+  state: 'ok' | 'quota' | 'auth' | 'error' | 'idle' | 'off'
+  detail: string | null
+  lastItems: number
+  inPool: number
+  checkedAt: string | null
+  retryAfter: string | null
+}
+
+export interface LlmRow {
+  name: string
+  configured: boolean
+  /** Position in the failover chain, 1-based. Null when not configured. */
+  order: number | null
+  state: 'ok' | 'quota' | 'auth' | 'error' | 'idle' | 'off'
+  detail: string | null
+  checkedAt: string | null
+  retryAfter: string | null
+}
+
+export interface SystemStatus {
+  jobSources: HealthRow[]
+  llm: LlmRow[]
+  scrapers: { name: string; configured: boolean }[]
+  queue: { total: number; enabled: number; dueNow: number; neverScraped: number; producing: number } | null
+  scrapeTargets: number
+}
+
+/** What is working right now — every third-party quota this app leans on. */
+export function getStatus(): Promise<SystemStatus> {
+  return request<SystemStatus>('/status')
+}
+
 export interface SourceInfo {
   sources: { name: string; count: number }[]
   scrapers: { name: string; configured: boolean }[]

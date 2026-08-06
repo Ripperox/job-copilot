@@ -117,13 +117,15 @@ export const CAREER_PAGE_TARGETS: string[] = [
   'https://www.sigmoid.com/careers/',
   'https://www.mad.co/careers',
 
+  // Removed 2026-08-06: tailscale, planetscale, clickhouse and temporal all
+  // publish to job-boards.greenhouse.io, so scraping their marketing pages
+  // spent LLM tokens to reach data the Greenhouse source reads for free and
+  // structurally. They are board tokens now, not scrape targets.
+  //
   // --- global remote-friendly, no public ATS board we already read ---
-  'https://tailscale.com/careers',
   'https://fly.io/jobs',
   'https://www.crunchydata.com/careers',
-  'https://planetscale.com/careers',
   'https://www.timescale.com/careers',
-  'https://clickhouse.com/company/careers',
   'https://www.cockroachlabs.com/careers/',
   'https://redis.io/careers/',
   'https://grafana.com/about/careers/',
@@ -133,6 +135,5 @@ export const CAREER_PAGE_TARGETS: string[] = [
   'https://ngrok.com/careers',
   'https://www.svix.com/careers/',
   'https://inngest.com/careers',
-  'https://temporal.io/careers',
   'https://www.hopsworks.ai/careers',
 ];

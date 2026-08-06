@@ -1,3 +1,4 @@
+import SystemStatus from './SystemStatus'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Profile } from '../api'
@@ -407,7 +408,8 @@ export default function ProfileView({
             )}
           </div>
         </div>
-      </section>
+            <SystemStatus />
+</section>
     </div>
   )
 }

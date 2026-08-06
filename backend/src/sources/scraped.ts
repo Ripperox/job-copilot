@@ -3,6 +3,7 @@ import { Job, Profile } from '../types';
 import { Config } from '../config';
 import { scrapePage } from '../scrapers';
 import { db } from '../db';
+import * as health from '../health';
 import {
   llmComplete,
   hasLLM,
@@ -230,6 +231,7 @@ async function extractFromPages(
         jobs.push(...made);
         perPage.set(url, (perPage.get(url) ?? 0) + made.length);
       }
+      void health.recordOk(provider, 'llm', jobs.length);
       i += group.length;
     } catch (e: unknown) {
       if (isTerminalForRun(e)) {
@@ -246,6 +248,7 @@ async function extractFromPages(
         console.error(
           `[scraped] ${provider} ${terminalReason(e)}${wait ? ` (retry-after ${Math.ceil(wait / 1000)}s)` : ''} — ${order[p + 1] ? `switching to ${order[p + 1]}` : 'no providers left'}`,
         );
+        void health.recordFailure(provider, 'llm', (e as Error).message ?? terminalReason(e), wait);
         p++;
         continue; // same pages, next provider
       }

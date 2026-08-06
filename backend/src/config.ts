@@ -57,7 +57,8 @@ export const config = {
   // ats-filter.ts, because these boards are large and mostly US-only.
   greenhouseBoards: list(
     process.env.GREENHOUSE_BOARDS,
-    'phonepe,groww,druva,postman,turing,mongodb,databricks,rubrik,adyen,bitgo,gitlab,mercury,vercel',
+    'phonepe,groww,druva,postman,turing,mongodb,databricks,rubrik,adyen,bitgo,gitlab,mercury,vercel,'+
+    'tailscale,planetscale,clickhouse,temporaltechnologies',
   ),
   leverBoards: list(process.env.LEVER_BOARDS, 'meesho,porter,zeta,mindtickle,cred'),
   ashbyBoards: list(

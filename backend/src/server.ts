@@ -18,6 +18,8 @@ import { llmProvider, llmComplete, isRateLimit } from './llm';
 import { encryptSecret, maskKey } from './crypto';
 import { llmConfigForUser, detectProvider, configForKey } from './user-llm';
 import { providerStatus } from './scrapers';
+import * as health from './health';
+import { llmProviderChain } from './llm';
 import { buildAuthUrl, exchangeCodeForIdentity } from './auth/google';
 import { setSessionCookie, clearSessionCookie, sessionCookieOptions } from './auth/session';
 import { attachUser, requireAuth } from './auth/middleware';
@@ -436,6 +438,73 @@ app.get('/api/sources', requireAuth, async (_req, res) => {
     // nothing to read, and the UI has to say that instead of promising a
     // trickle of roles that can never arrive.
     careerPageCount: config.scrapeCareerPages.length,
+  });
+});
+
+// Everything that can quietly stop working, in one place.
+//
+// Built after three job sources sat monthly-quota-dead for hours while the
+// dashboard showed a healthy-looking pool of stale rows. Fetching, scoring and
+// scraping all depend on third-party quotas that expire without warning, and
+// none of that was visible anywhere except stderr.
+app.get('/api/status', requireAuth, async (_req, res) => {
+  const [recorded, counts, queue] = await Promise.all([
+    health.all().catch(() => []),
+    db.countBySource().catch(() => []),
+    db.scrapeQueueStatus().catch(() => null),
+  ]);
+
+  const byName = new Map(recorded.map((h) => [h.name, h]));
+  const countOf = (n: string) => counts.find((c) => c.name === n)?.count ?? 0;
+
+  // Which sources COULD run, so a source that has never been configured is
+  // distinguishable from one that is configured and broken.
+  const jobSources = [
+    { name: 'adzuna', configured: Boolean(config.adzunaAppId && config.adzunaAppKey) },
+    { name: 'greenhouse', configured: config.greenhouseBoards.length > 0 },
+    { name: 'lever', configured: config.leverBoards.length > 0 },
+    { name: 'ashby', configured: config.ashbyBoards.length > 0 },
+    { name: 'jsearch', configured: Boolean(config.jsearchApiKey) },
+    { name: 'jooble', configured: Boolean(config.joobleApiKey) },
+    { name: 'activejobs', configured: Boolean(config.activeJobsApiKey) },
+    { name: 'linkedin', configured: Boolean(config.linkedinJobsApiKey) },
+    { name: 'scraped', configured: config.scrapeCareerPages.length > 0 },
+  ].map((s) => {
+    const h = byName.get(s.name);
+    return {
+      ...s,
+      state: !s.configured ? 'off' : (h?.state ?? 'idle'),
+      detail: h?.detail ?? null,
+      lastItems: h?.items ?? 0,
+      inPool: countOf(s.name),
+      checkedAt: h?.checkedAt ?? null,
+      retryAfter: h?.retryAfter ?? null,
+    };
+  });
+
+  const chain = llmProviderChain(config);
+  const llm = (['groq', 'gemini', 'cerebras', 'anthropic'] as const).map((name) => {
+    const h = byName.get(name);
+    const configured = chain.includes(name);
+    return {
+      name,
+      configured,
+      // Position in the failover chain, so it is obvious which one is doing
+      // the work and which are standing by.
+      order: configured ? chain.indexOf(name) + 1 : null,
+      state: !configured ? 'off' : (h?.state ?? 'idle'),
+      detail: h?.detail ?? null,
+      checkedAt: h?.checkedAt ?? null,
+      retryAfter: h?.retryAfter ?? null,
+    };
+  });
+
+  res.json({
+    jobSources,
+    llm,
+    scrapers: providerStatus(config),
+    queue,
+    scrapeTargets: config.scrapeCareerPages.length,
   });
 });
 
