@@ -548,3 +548,24 @@
     margin-bottom: 0;
   }
 }
+
+/* Résumé upload. Given real presence above the textarea, because a file is what
+   the user already has and pasting is the fallback, not the other way round. */
+.pf-drop {
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-4); margin-bottom: var(--sp-3);
+  border: 1px dashed var(--line-2, var(--line)); border-radius: var(--r-3);
+  background: var(--surface-2); transition: border-color .15s, background .15s;
+}
+.pf-drop.is-over { border-color: var(--accent); background: var(--surface-3); }
+.pf-drop-input { display: none; }
+.pf-drop-btn {
+  padding: var(--sp-2) var(--sp-4); border: 1px solid var(--line);
+  border-radius: var(--r-2); background: var(--surface-1); color: var(--ink-1);
+  font: inherit; font-size: .87rem; font-weight: 500; cursor: pointer;
+}
+.pf-drop-btn:hover:not(:disabled) { border-color: var(--accent); }
+.pf-drop-btn:disabled { opacity: .6; cursor: default; }
+.pf-drop-hint { margin: 0; font-size: .85rem; color: var(--ink-3); }
+.pf-drop-err { margin: 0 0 var(--sp-3); font-size: .85rem; color: var(--bad, #e5534b); }
+@media (prefers-reduced-motion: reduce) { .pf-drop { transition: none; } }

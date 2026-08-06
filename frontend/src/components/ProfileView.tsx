@@ -1,5 +1,6 @@
 import SystemStatus from './SystemStatus'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { ACCEPTED, ResumeFileError, readResumeFile } from '../lib/resume-file'
 import type { ReactNode } from 'react'
 import type { Profile } from '../api'
 import { UnauthorizedError, deleteAccount, getProfile, saveProfile } from '../api'
@@ -79,6 +80,33 @@ export default function ProfileView({
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [resumeText, setResumeText] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
+  const [reading, setReading] = useState(false)
+  const [fileError, setFileError] = useState<string | null>(null)
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null)
+
+  // Reads a dropped or chosen file into the textarea. The text stays editable
+  // afterwards on purpose — PDF extraction is imperfect, and the user should be
+  // able to fix a mangled line rather than start over.
+  async function loadResumeFile(file: File) {
+    setReading(true)
+    setFileError(null)
+    try {
+      const text = await readResumeFile(file)
+      setResumeText(text)
+      setResumeFileName(file.name)
+    } catch (err: unknown) {
+      setResumeFileName(null)
+      setFileError(
+        err instanceof ResumeFileError
+          ? err.message
+          : 'Could not read that file. Paste the text below instead.',
+      )
+    } finally {
+      setReading(false)
+    }
+  }
   const [roles, setRoles] = useState('')
   const [locations, setLocations] = useState('')
   const [mustHaves, setMustHaves] = useState('')
@@ -201,9 +229,64 @@ export default function ProfileView({
       <section className="pf-sec">
         <h2 className="sec-title">Your résumé</h2>
         <p className="sec-sub">
-          The one document the scorer actually reads. Paste the whole thing rather
+          The one document the scorer actually reads. Give it the whole thing rather
           than a summary — bullets, stack, dates, numbers. Formatting is ignored.
         </p>
+
+        {/* Upload first, paste second.
+            This was a bare textarea reading "paste your full resume text here",
+            which is the highest-friction moment in the product: a wall of
+            nothing, asking for a chunk of writing the user has to go and find,
+            open, select and copy. The file they already have is a PDF. */}
+        <div
+          className={`pf-drop${dragging ? ' is-over' : ''}`}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setDragging(true)
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setDragging(false)
+            const f = e.dataTransfer.files?.[0]
+            if (f) void loadResumeFile(f)
+          }}
+        >
+          <input
+            ref={fileInput}
+            type="file"
+            accept={ACCEPTED}
+            className="pf-drop-input"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void loadResumeFile(f)
+              // Reset, so choosing the same file twice still fires onChange.
+              e.target.value = ''
+            }}
+          />
+          <button
+            type="button"
+            className="pf-drop-btn"
+            onClick={() => fileInput.current?.click()}
+            disabled={reading}
+          >
+            {reading ? 'Reading…' : 'Choose a file'}
+          </button>
+          <p className="pf-drop-hint">
+            or drop a PDF or text file here
+            {resumeFileName && !reading ? (
+              <>
+                {' · '}
+                <span className="u-mono">{resumeFileName}</span> loaded
+              </>
+            ) : null}
+          </p>
+        </div>
+        {fileError ? (
+          <p className="pf-drop-err" role="alert">
+            {fileError}
+          </p>
+        ) : null}
 
         <div className="pf-doc">
           <div className="pf-doc-bar">
@@ -221,7 +304,7 @@ export default function ProfileView({
             className="pf-doc-area"
             rows={12}
             value={resumeText}
-            placeholder="Paste your full resume text here…"
+            placeholder="…or paste it here. Uploading fills this in, and you can edit it afterwards."
             onChange={(e) => setResumeText(e.target.value)}
           />
         </div>

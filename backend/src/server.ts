@@ -288,8 +288,41 @@ app.put('/api/profile', async (req, res) => {
     mustHaves: Array.isArray(b.mustHaves) ? b.mustHaves : [],
     cvVariants: Array.isArray(b.cvVariants) && b.cvVariants.length ? b.cvVariants : ['Backend', 'AI', 'Blockchain'],
   };
-  res.json(await db.setProfile(req.userId!, profile));
+  const saved = await db.setProfile(req.userId!, profile);
+  res.json(saved);
+  // Deliberately after the response: a new user should not wait on scoring, and
+  // a failure here must not fail the save.
+  void seedScoresForNewUser(req.userId!, saved);
 });
+
+// A brand-new user's first act is saving a resume. The shared pool already holds
+// thousands of postings at that moment, so making them then go and press "fetch"
+// before they see anything is a chore that teaches them nothing — the jobs are
+// already there, they just have no score for this user yet. So score a first
+// page of them in the background; onboarding polls and the list fills itself in.
+//
+// First save only. Later edits go through the explicit rescore button, which is
+// a deliberate choice the user makes about spending their own quota.
+async function seedScoresForNewUser(userId: string, profile: Profile): Promise<void> {
+  if (!profile.resumeText.trim()) return;
+  if (fetching.has(userId)) return;
+  try {
+    if ((await db.countScores(userId)) > 0) return;
+    const pending = await db.unscoredJobs(userId);
+    if (!pending.length) return;
+
+    fetching.add(userId);
+    try {
+      const { config: llm } = await llmConfigForUser(userId, config);
+      const n = await scoreAndStore(userId, pending.slice(0, config.maxScorePerRun), profile, llm);
+      console.log(`[onboarding] seeded ${n} scores for new user ${userId.slice(0, 8)}`);
+    } finally {
+      fetching.delete(userId);
+    }
+  } catch (e) {
+    console.error('[onboarding] could not seed scores:', e);
+  }
+}
 
 // Jobs are a SHARED pool, but the search queries and the scores are per-user: the
 // sources are queried using a user's roles/locations, and every result is scored

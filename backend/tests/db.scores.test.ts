@@ -43,6 +43,20 @@ describe('db scores', () => {
     expect(unscored.map((j) => j.id)).toEqual(['a:2']);
   });
 
+  // countScores is what decides whether a profile save is a user's FIRST one,
+  // and so whether to seed their scores in the background. A wrong answer here
+  // either leaves a new user staring at an empty list or re-scores on every save.
+  it('counts a user\'s scores, and only that user\'s', async () => {
+    await db.upsertJob(job('a:1'));
+    await db.upsertJob(job('a:2'));
+    expect(await db.countScores(TEST_USER_ID)).toBe(0);
+    await db.setScore(TEST_USER_ID, score('a:1'));
+    await db.setScore(TEST_USER_ID, score('a:2'));
+    await db.setScore(OTHER_USER_ID, score('a:1'));
+    expect(await db.countScores(TEST_USER_ID)).toBe(2);
+    expect(await db.countScores(OTHER_USER_ID)).toBe(1);
+  });
+
   it('isolates scores per user', async () => {
     await db.upsertJob(job('a:1'));
     await db.setScore(TEST_USER_ID, score('a:1'));

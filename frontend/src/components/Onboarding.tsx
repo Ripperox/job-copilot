@@ -173,7 +173,7 @@ export default function Onboarding({
           state={resumeDone ? 'done' : 'todo'}
           emphasis={next === 1}
           title="Add your résumé"
-          why="Every score is a comparison against this text. Without it there is nothing to match a job to."
+          why="Drop in the PDF you already have. Every score is a comparison against this text, so without it there is nothing to match a job to."
           done={
             resumeDone ? (
               <>
@@ -217,17 +217,22 @@ export default function Onboarding({
           index={3}
           state={jobsDone ? 'done' : 'todo'}
           emphasis={next === 3}
-          title="Fetch your first jobs"
-          why="Pulls postings from company career pages and the job boards, then scores each one against your résumé."
+          title="See your matches"
+          why="Postings are already collected from company career pages and the job boards. Saving your résumé starts scoring them against it."
           done={
             jobsDone ? (
               <>
                 <span className="u-num">{setup.jobCount.toLocaleString()}</span> postings in your
                 pipeline
               </>
-            ) : !resumeDone ? (
-              'Worth doing after your résumé — otherwise there is nothing to score against.'
-            ) : null
+            ) : resumeDone ? (
+              // The seeding pass runs in the background on first profile save,
+              // so this is a wait, not a chore. Say so rather than implying the
+              // user has forgotten to press something.
+              'Scoring your first batch now — this takes a minute or two. Refresh to check.'
+            ) : (
+              'Starts on its own once your résumé is saved.'
+            )
           }
           action={{ label: 'Go to career pages', to: 'career-pages' }}
           onGo={onGo}

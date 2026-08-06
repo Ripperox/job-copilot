@@ -266,6 +266,14 @@ export const db = {
     );
   },
 
+  async countScores(userId: string): Promise<number> {
+    const { rows } = await query<{ n: string }>(
+      'SELECT count(*)::int AS n FROM scores WHERE user_id = $1',
+      [userId],
+    );
+    return Number(rows[0]?.n ?? 0);
+  },
+
   async unscoredJobs(userId: string): Promise<Job[]> {
     const { rows } = await query<JobRow>(
       `SELECT j.* FROM jobs j
