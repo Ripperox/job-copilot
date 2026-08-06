@@ -242,7 +242,7 @@ export default function App() {
             <span className="shell-mark" aria-hidden="true">
               <BrandGlyph />
             </span>
-            <span className="shell-wordmark">Job Copilot</span>
+            <span className="shell-wordmark">Shortlist</span>
           </div>
 
           {/* One indicator that slides between tabs, rather than three that

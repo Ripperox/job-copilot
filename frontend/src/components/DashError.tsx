@@ -107,7 +107,7 @@ export function describeError(
         }
       : {
           title: 'Can’t reach the server',
-          body: 'The request never got through to the Job Copilot backend. It may be restarting, waking up from sleep, or blocked by your network.',
+          body: 'The request never got through to the Shortlist backend. It may be restarting, waking up from sleep, or blocked by your network.',
           hint: 'Give it a few seconds and try again. If it keeps failing, check that the backend is actually running.',
           retryLabel,
           code: null,

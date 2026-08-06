@@ -186,7 +186,7 @@ export default function ProfileView({
       <header className="pf-head">
         <h1 className="pf-h1">Profile</h1>
         <p className="pf-lede">
-          This is what Job Copilot uses to score and match jobs for you. Your résumé
+          This is what Shortlist uses to score and match jobs for you. Your résumé
           is what every role gets compared against; everything else narrows the
           search.
         </p>

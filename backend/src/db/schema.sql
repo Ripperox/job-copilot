@@ -1,4 +1,4 @@
--- Job Copilot schema. Idempotent: safe to run on every boot.
+-- Shortlist schema. Idempotent: safe to run on every boot.
 -- Shared tables hold data identical for all users; per-user tables are keyed by user_id.
 
 CREATE TABLE IF NOT EXISTS users (

@@ -631,7 +631,7 @@ if (require.main === module) {
   process.on('SIGINT', shutdown('SIGINT'));
 
   app.listen(config.port, async () => {
-    console.log(`Job Copilot API on http://localhost:${config.port}`);
+    console.log(`Shortlist API on http://localhost:${config.port}`);
     try {
       await applySchema();
       // Keeps the pre-auth data's owner row alive until it is claimed by a real

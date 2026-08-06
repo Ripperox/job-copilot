@@ -14,7 +14,7 @@ const STEPS: { lead: string; rest: string }[] = [
     rest: 'plus the roles, locations and salary floor you are targeting.',
   },
   {
-    lead: 'Job Copilot fetches new openings',
+    lead: 'Shortlist fetches new openings',
     rest: 'and scores each one from 0 to 100, with a line explaining why.',
   },
   {
@@ -64,7 +64,7 @@ export default function SignIn({ authEnabled, notice }: { authEnabled: boolean; 
                 <rect x="1" y="11" width="6" height="3" rx="1.5" fill="currentColor" opacity=".3" />
               </svg>
             </span>
-            <span className="lp-wordmark">Job Copilot</span>
+            <span className="lp-wordmark">Shortlist</span>
           </div>
 
           <div className="lp-top-right">
@@ -92,7 +92,7 @@ export default function SignIn({ authEnabled, notice }: { authEnabled: boolean; 
             </h1>
 
             <p className="lp-lede">
-              Job Copilot gathers roles from job boards and company career pages, scores
+              Shortlist gathers roles from job boards and company career pages, scores
               each one against your résumé with an LLM, and drafts the outreach, so your
               evenings go to the handful actually worth applying to.
             </p>
@@ -220,7 +220,7 @@ export default function SignIn({ authEnabled, notice }: { authEnabled: boolean; 
             )}
 
             <p className="lp-trust">
-              <strong>You stay the send button.</strong> Job Copilot writes the drafts and
+              <strong>You stay the send button.</strong> Shortlist writes the drafts and
               points you at who to contact, but nothing is ever sent or applied for on your
               behalf.
             </p>

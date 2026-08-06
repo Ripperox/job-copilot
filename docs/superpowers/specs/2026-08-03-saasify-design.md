@@ -1,4 +1,4 @@
-# Job Copilot — Multi-tenant SaaS design
+# Shortlist — Multi-tenant SaaS design
 
 **Date:** 2026-08-03
 **Status:** approved. **Phase 1 (Postgres migration) — SHIPPED 2026-08-03** on branch
@@ -8,13 +8,13 @@ migrated from `store.json` and verified against a backup). Phases 2–5 pending.
 One refinement adopted during Phase 1: the `users` table and `user_id` columns were
 created up front and every `db` call site threads a fixed `LOCAL_USER_ID`, so Phase 3
 is parameter plumbing (constant → session) rather than a schema and query rewrite.
-**Scope:** turn the single-user local Job Copilot into a hosted, multi-tenant web app with Google login and bring-your-own-key (BYOK) LLM scoring.
+**Scope:** turn the single-user local Shortlist into a hosted, multi-tenant web app with Google login and bring-your-own-key (BYOK) LLM scoring.
 
 ---
 
 ## 1. Context — where the app is today
 
-Job Copilot currently runs as a local, single-user tool:
+Shortlist currently runs as a local, single-user tool:
 
 - **backend/** — Express + TypeScript (run via `tsx`), a JSON-file store (`backend/data/store.json`) behind a `db` module, pluggable job sources (Adzuna, JSearch, Jooble, Active Jobs DB, LinkedIn, Greenhouse, Lever, mock), a provider-agnostic LLM layer (Gemini → Groq → Anthropic → heuristic), and an hourly auto-fetch scheduler.
 - **frontend/** — React + Vite dashboard reading `VITE_API_URL` (default `http://localhost:4500/api`).

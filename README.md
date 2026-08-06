@@ -1,4 +1,4 @@
-# Job Copilot
+# Shortlist
 
 A human-in-the-loop job-search cockpit. It pulls roles from five job sources,
 scores every one against your résumé with an LLM (plus a hard experience filter),

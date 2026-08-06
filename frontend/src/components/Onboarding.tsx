@@ -152,7 +152,7 @@ export default function Onboarding({
             Three things and you are running
           </h2>
           <p className="ob-sub">
-            Job Copilot scores every posting it finds against your résumé and drafts the
+            Shortlist scores every posting it finds against your résumé and drafts the
             outreach for the ones worth your time. This is the setup that makes that work — any
             order, and you can come back later.
           </p>

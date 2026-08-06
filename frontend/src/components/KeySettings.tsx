@@ -75,7 +75,7 @@ export default function KeySettings({
     <section className="pf-sec">
       <h2 className="sec-title">Scoring key</h2>
       <p className="sec-sub">
-        Job Copilot scores every role against your résumé with an LLM, and it runs on{' '}
+        Shortlist scores every role against your résumé with an LLM, and it runs on{' '}
         <strong>your own API key</strong> — so the usage, the limits and the logs stay
         yours. Paste a key from Groq, Google Gemini or Anthropic and the server works out
         which it is.{' '}

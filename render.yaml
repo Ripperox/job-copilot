@@ -1,4 +1,4 @@
-# Render blueprint for the Job Copilot backend.
+# Render blueprint for the Shortlist backend.
 # The backend needs a long-lived process (the hourly fetch scheduler runs in it),
 # so it is a web service rather than a serverless function.
 #
