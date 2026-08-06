@@ -416,8 +416,21 @@ export default function Dashboard({
             )}
           </p>
           <div className="dsh-empty-acts">
+            {/* When the matches are on the OTHER dashboard, going there is the
+                useful next step, so it gets the primary action. Stating where
+                the jobs are and leaving someone to find the tab is not help —
+                this exact screen was read as "broken" four times running. */}
+            {otherCount > 0 && onSwitchView && (
+              <button
+                type="button"
+                className="dsh-btn dsh-btn-primary"
+                onClick={() => onSwitchView(career ? 'job-boards' : 'career-pages')}
+              >
+                Go to {other} ({otherCount})
+              </button>
+            )}
             <button type="button" className="dsh-btn dsh-btn-go" onClick={() => setMinScore(0)}>
-              Show all {poolForView}
+              Show all {poolForView} here
             </button>
           </div>
         </div>
