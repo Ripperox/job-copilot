@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import type { JobStatus, ScoredJob, SourceInfo } from '../api'
-import { JOB_STATUSES, UnauthorizedError, fetchJobs, getJobs, getSources, rescoreJobs } from '../api'
+import type { JobStatus, ScoredJob, SourceInfo, RescoreProgress } from '../api'
+import { JOB_STATUSES, UnauthorizedError, fetchJobs, getJobs, getRescoreStatus, getSources, startRescore } from '../api'
 import JobCard from './JobCard'
 import DashError, { describeError } from './DashError'
 import type { DashErrorInfo } from './DashError'
@@ -79,6 +79,8 @@ export default function Dashboard({
   } | null>(null)
   const [phase, setPhase] = useState<RunPhase>('idle')
   const [note, setNote] = useState<Note | null>(null)
+  // Live progress of a background rescore. Null when none is running.
+  const [rescore, setRescore] = useState<RescoreProgress | null>(null)
   const [sources, setSources] = useState<SourceInfo | null>(null)
   // How many roles clear the CURRENT floor on the other dashboard. Shown in the
   // empty state so "nothing here" never reads as "nothing anywhere" — the most
@@ -210,17 +212,47 @@ export default function Dashboard({
     }
   }
 
+  // Rescoring the whole pool takes minutes, so the server runs it in the
+  // background and we follow along. Awaiting one long request is what used to
+  // leave the pool half-scored: the connection died well before the work did.
   async function handleRescore() {
     setPhase('rescoring')
     setActionError(null)
     setNote(null)
+    setRescore(null)
     const startedAt = Date.now()
     try {
-      const result = await rescoreJobs()
+      const begun = await startRescore()
+      setRescore(begun.progress)
+
+      // Poll until the server says it is done. Two seconds is often enough that
+      // the bar visibly moves, and cheap enough to leave running for ten minutes.
+      const final = await new Promise<RescoreProgress | null>((resolve, reject) => {
+        const timer = window.setInterval(() => {
+          getRescoreStatus()
+            .then((s) => {
+              if (s.progress) setRescore(s.progress)
+              if (!s.running) {
+                window.clearInterval(timer)
+                resolve(s.progress)
+              }
+            })
+            .catch((e) => {
+              window.clearInterval(timer)
+              reject(e)
+            })
+        }, 2000)
+      })
+
+      if (final?.error) throw new Error(final.error)
+
       const secs = Math.round((Date.now() - startedAt) / 1000)
+      const n = final?.written ?? 0
       setNote({
         title: 'Re-scoring finished',
-        line: `Re-scored ${result.rescored} ${result.rescored === 1 ? 'job' : 'jobs'} against your current profile.`,
+        line: final?.usedLLM
+          ? `Read and scored ${n} ${n === 1 ? 'job' : 'jobs'} against your current profile.`
+          : `Scored ${n} ${n === 1 ? 'job' : 'jobs'} by keyword. Add a scoring key on the Profile tab to get scores with reasons.`,
         meta: formatElapsed(secs),
       })
       await load(minScore)
@@ -610,6 +642,7 @@ export default function Dashboard({
       phase={phase}
       layout={career ? 'rail' : 'bar'}
       canRescore={jobs.length > 0 || poolForView > 0}
+      rescore={rescore}
       onFetch={() => void handleFetch()}
       onRescore={() => void handleRescore()}
     />

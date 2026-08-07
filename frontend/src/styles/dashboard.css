@@ -1063,3 +1063,21 @@
   font-weight: 500;
 }
 .dsh-btn-primary:hover { filter: brightness(1.08); }
+
+/* A rescore is the one operation that knows its own length, so its bar fills
+   for real instead of sweeping. The indeterminate animation has to be switched
+   off explicitly, or the sweep fights the width. */
+.dsh-bar.is-known i {
+  animation: none;
+  transition: width var(--dur-2) var(--ease);
+}
+
+.dsh-prog-count {
+  margin: 0.35rem 0 0;
+  font-size: var(--fs-xs);
+  color: var(--faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsh-bar.is-known i { transition: none; }
+}

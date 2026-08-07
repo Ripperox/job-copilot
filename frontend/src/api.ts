@@ -84,8 +84,20 @@ export interface FetchResult {
   total: number
 }
 
-export interface RescoreResult {
-  rescored: number
+export interface RescoreProgress {
+  total: number
+  done: number
+  /** Scores actually written. Can trail `done` if a row failed to persist. */
+  written: number
+  startedAt: number
+  finishedAt: number | null
+  error: string | null
+  usedLLM: boolean
+}
+
+export interface RescoreStatus {
+  running: boolean
+  progress: RescoreProgress | null
 }
 
 // In-flight request de-duplication.
@@ -243,8 +255,14 @@ export function fetchJobs(): Promise<FetchResult> {
   return request<FetchResult>('/fetch', { method: 'POST' })
 }
 
-export function rescoreJobs(): Promise<RescoreResult> {
-  return request<RescoreResult>('/rescore', { method: 'POST' })
+/** Starts a rescore and returns immediately — the work runs on the server.
+ *  Poll getRescoreStatus() to follow it. */
+export function startRescore(): Promise<{ started: boolean; progress: RescoreProgress }> {
+  return request<{ started: boolean; progress: RescoreProgress }>('/rescore', { method: 'POST' })
+}
+
+export function getRescoreStatus(): Promise<RescoreStatus> {
+  return request<RescoreStatus>('/rescore')
 }
 
 export interface JobPage {

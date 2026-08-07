@@ -104,22 +104,110 @@ Return ONLY JSON: {"score": <0-100 integer>, "reason": "<one concise sentence>",
   };
 }
 
+// The keyword fallback, used when there is no LLM key or the provider is spent.
+//
+// The previous version was `hits / terms.length * 100` over a substring match,
+// which was wrong in both directions and filled the database with noise: two
+// profile terms appearing ANYWHERE in a 4,000-character description scored the
+// job 100, while a genuinely good role that happened not to contain the exact
+// substring scored 0. Measured on the live pool, 1,595 of 1,833 jobs sat at
+// 0-9 and so fell below the display floor, while the two highest-scoring jobs
+// in the entire account were keyword artefacts reading "matched 2/2 of your key
+// terms". `includes()` also matched "go" inside "django" and "category".
+//
+// Three rules fix it:
+//   1. WORD BOUNDARIES, not substrings.
+//   2. WEIGHT BY WHERE THE MATCH IS. A term in the title is evidence; the same
+//      term buried in a benefits paragraph is nearly none.
+//   3. NEVER CLAIM CERTAINTY IT HASN'T EARNED. Keyword overlap cannot tell an
+//      excellent role from a mediocre one, so the whole scale is compressed
+//      into a band sitting below anything the model calls a strong match. An
+//      honest 55 is worth more than a fabricated 100.
+
+/** Ceiling for any keyword-derived score. Below the LLM's "apply" band (80+) so
+ *  a real judgement always outranks a guess, but above the UI's floor of 50 so
+ *  the best guesses stay visible when no key is configured. */
+const HEURISTIC_MAX = 68;
+
+/** Floor for a plausible role, so a good job is never invisible merely because
+ *  it words itself differently from the profile. */
+const HEURISTIC_BASE = 22;
+
+function hasWord(haystack: string, term: string): boolean {
+  const t = term.trim().toLowerCase();
+  if (!t) return false;
+  // Profile terms are user input and routinely contain "c++", "node.js", "ci/cd".
+  const esc = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // \b fails against a leading or trailing non-word character ("c++", ".net"),
+  // so anchor on "not an identifier character, or the edge" instead.
+  return new RegExp(`(?:^|[^a-z0-9+#.])${esc}(?:$|[^a-z0-9+#.])`, 'i').test(haystack);
+}
+
 export function heuristicScore(job: Job, profile: Profile): ScoreResult {
-  const hay = `${job.title} ${job.description} ${job.location}`.toLowerCase();
-  const terms = [...profile.roles, ...profile.mustHaves].map((t) => t.toLowerCase()).filter(Boolean);
-  let hits = 0;
-  for (const t of terms) if (hay.includes(t)) hits++;
-  const score = terms.length ? Math.round((hits / terms.length) * 100) : 0;
+  const title = (job.title || '').toLowerCase();
+  const body = (job.description || '').toLowerCase();
+  const where = (job.location || '').toLowerCase();
+
+  const roles = profile.roles.map((r) => r.toLowerCase()).filter(Boolean);
+  const musts = profile.mustHaves.map((m) => m.toLowerCase()).filter(Boolean);
+
+  let score = HEURISTIC_BASE;
+  const why: string[] = [];
+
+  // A wanted role in the TITLE is the strongest signal available without a model,
+  // and it is weighted so that it ALONE clears the UI's floor of 50. A posting
+  // actually called "Backend Engineer" must never be hidden from someone who
+  // asked for backend engineer roles, whatever else does or doesn't match.
+  const titleHits = roles.filter((r) => hasWord(title, r));
+  if (titleHits.length) {
+    score += 30;
+    why.push(`title matches "${titleHits[0]}"`);
+  } else if (roles.some((r) => hasWord(body, r))) {
+    score += 8;
+    why.push('role mentioned in the description');
+  }
+
+  // Must-haves are proportional — these are the terms the user said matter.
+  if (musts.length) {
+    const hit = musts.filter((m) => hasWord(title, m) || hasWord(body, m));
+    if (hit.length) {
+      score += Math.round((hit.length / musts.length) * 18);
+      why.push(`${hit.length} of ${musts.length} must-haves (${hit.slice(0, 3).join(', ')})`);
+    }
+  }
+
+  // Location, including remote — which a user's location list rarely spells out.
+  const remote = /\bremote\b|\bwork from home\b|\banywhere\b/.test(`${title} ${where} ${body}`);
+  if (profile.locations.some((l) => hasWord(where, l))) {
+    score += 10;
+    why.push('location matches');
+  } else if (remote) {
+    score += 8;
+    why.push('remote');
+  }
+
+  // Seniority. The gate already removes clearly-too-senior roles, so this is the
+  // softer signal: an explicitly junior title is a positive.
+  if (/\b(junior|jr\.?|associate|entry[-\s]?level|graduate|grad|trainee|fresher)\b/i.test(title)) {
+    score += 6;
+    why.push('junior-level title');
+  }
+
+  score = Math.max(0, Math.min(HEURISTIC_MAX, score));
 
   let cvVariant = profile.cvVariants[0] ?? 'Default';
+  const hay = `${title} ${body} ${where}`;
   if (/\b(ml|ai|llm|genai|nlp|machine learning)\b/.test(hay) && profile.cvVariants.includes('AI')) {
     cvVariant = 'AI';
   } else if (/\b(blockchain|web3|solidity|crypto|smart contract|solana|ethereum)\b/.test(hay) && profile.cvVariants.includes('Blockchain')) {
     cvVariant = 'Blockchain';
   }
-  return {
-    score,
-    reason: `Heuristic: matched ${hits}/${terms.length} of your key terms.`,
-    cvVariant,
-  };
+
+  // Say plainly that no model read this, so a thin reason is not mistaken for a
+  // considered judgement.
+  const reason = why.length
+    ? `Keyword match only — ${why.join(', ')}. Not read by a model.`
+    : 'Keyword match only — no strong overlap with your profile. Not read by a model.';
+
+  return { score, reason: reason.slice(0, 300), cvVariant };
 }

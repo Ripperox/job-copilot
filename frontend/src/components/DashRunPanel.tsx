@@ -47,6 +47,7 @@ export default function DashRunPanel({
   phase,
   layout,
   canRescore,
+  rescore,
   onFetch,
   onRescore,
 }: {
@@ -54,6 +55,11 @@ export default function DashRunPanel({
   /** 'rail' — boxed, stacked, for the career-pages sidebar. 'bar' — inline, for the job-boards console. */
   layout: 'rail' | 'bar'
   canRescore: boolean
+  /** Live server-side rescore progress, when one is running. Turns the
+   *  indeterminate bar into a real one — a rescore is the only operation here
+   *  that reports how far along it is, because it is the only one long enough
+   *  to need to. */
+  rescore?: { total: number; done: number } | null
   onFetch: () => void
   onRescore: () => void
 }) {
@@ -73,6 +79,13 @@ export default function DashRunPanel({
   }, [phase])
 
   const running = phase !== 'idle'
+
+  // Only a rescore knows its own size. Everything else stays indeterminate
+  // rather than inventing a percentage that would stall at 80% and get caught.
+  const pct =
+    rescore && rescore.total > 0
+      ? Math.min(100, Math.round((rescore.done / rescore.total) * 100))
+      : null
 
   return (
     <section
@@ -119,16 +132,26 @@ export default function DashRunPanel({
           </div>
 
           <div
-            className="dsh-bar"
+            className={`dsh-bar${pct === null ? '' : ' is-known'}`}
             role="progressbar"
+            aria-valuenow={pct ?? undefined}
+            aria-valuemin={pct === null ? undefined : 0}
+            aria-valuemax={pct === null ? undefined : 100}
             aria-label={
               phase === 'fetching'
                 ? 'Fetching and scoring jobs'
                 : 'Re-scoring jobs'
             }
           >
-            <i aria-hidden="true" />
+            <i aria-hidden="true" style={pct === null ? undefined : { width: `${pct}%` }} />
           </div>
+
+          {pct !== null && rescore && (
+            <p className="dsh-prog-count">
+              <span className="u-num">{rescore.done.toLocaleString()}</span> of{' '}
+              <span className="u-num">{rescore.total.toLocaleString()}</span> scored
+            </p>
+          )}
 
           <ol className="dsh-steps">
             {STEPS[phase].map((step, i) => (

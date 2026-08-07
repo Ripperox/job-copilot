@@ -418,14 +418,82 @@ app.post('/api/fetch', async (req, res) => {
   }
 });
 
-// Re-score ALL jobs against the current profile. Useful after adding an LLM key
-// or editing your profile (fetch only scores brand-new jobs).
+// Re-scoring the whole pool, in the background.
+//
+// This used to score every job inside the HTTP request and return when it was
+// done. At 1,833 jobs that cannot finish: batched scoring paces itself against
+// the provider's tokens-per-minute limit, so a full pass is on the order of ten
+// minutes, and both Render's proxy and the browser give up long before. The
+// request died, the work was abandoned part-way, and the pool stayed mostly
+// keyword-scored — which is how an account ends up with 87% of its jobs sitting
+// below the display floor.
+//
+// So: start it, return immediately, and let the client watch. Progress is kept
+// in memory rather than in Postgres because it is worthless after a restart —
+// if the process dies the run is gone, and the honest thing is to show nothing
+// rather than a stalled bar that will never move again.
+interface RescoreProgress {
+  total: number;
+  done: number;
+  written: number;
+  startedAt: number;
+  finishedAt: number | null;
+  error: string | null;
+  usedLLM: boolean;
+}
+const rescoring = new Map<string, RescoreProgress>();
+
+/** Jobs per slice. Small enough that progress moves visibly, large enough that
+ *  the batch scorer can still pack many jobs into one LLM request. */
+const RESCORE_SLICE = 100;
+
+async function runRescore(userId: string, profile: Profile): Promise<void> {
+  const p = rescoring.get(userId)!;
+  try {
+    const { config: llm, hasKey } = await llmConfigForUser(userId, config);
+    p.usedLLM = hasKey;
+    const all = await db.allJobs();
+    p.total = all.length;
+
+    for (let i = 0; i < all.length; i += RESCORE_SLICE) {
+      const slice = all.slice(i, i + RESCORE_SLICE);
+      p.written += await scoreAndStore(userId, slice, profile, llm);
+      p.done += slice.length;
+      console.log(`[rescore] user=${userId.slice(0, 8)} ${p.done}/${p.total}`);
+    }
+  } catch (e: any) {
+    p.error = e?.message ?? 'Rescore failed';
+    console.error('[rescore] failed:', e);
+  } finally {
+    p.finishedAt = Date.now();
+  }
+}
+
 app.post('/api/rescore', async (req, res) => {
-  const profile = await db.getProfile(req.userId!);
+  const userId = req.userId!;
+  const profile = await db.getProfile(userId);
   if (!profile) return res.status(400).json({ error: 'Set your profile first.' });
-  const { config: llm, hasKey } = await llmConfigForUser(req.userId!, config);
-  const rescored = await scoreAndStore(req.userId!, await db.allJobs(), profile, llm);
-  res.json({ rescored, usedLLM: hasKey });
+
+  const existing = rescoring.get(userId);
+  if (existing && existing.finishedAt === null) {
+    return res.status(409).json({ error: 'A rescore is already running.', progress: existing });
+  }
+
+  const progress: RescoreProgress = {
+    total: 0, done: 0, written: 0,
+    startedAt: Date.now(), finishedAt: null, error: null, usedLLM: false,
+  };
+  rescoring.set(userId, progress);
+  // Deliberately not awaited — the point of this endpoint is to return now.
+  void runRescore(userId, profile);
+  res.status(202).json({ started: true, progress });
+});
+
+/** Where the current (or most recent) rescore got to. */
+app.get('/api/rescore', (req, res) => {
+  const p = rescoring.get(req.userId!);
+  if (!p) return res.json({ running: false, progress: null });
+  res.json({ running: p.finishedAt === null, progress: p });
 });
 
 // List scored jobs, best first.
