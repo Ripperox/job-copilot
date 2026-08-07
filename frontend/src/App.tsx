@@ -6,6 +6,7 @@ import { API, getHealth, getJobs, getMe, logout } from './api'
 import ProfileView from './components/ProfileView'
 import Dashboard from './components/Dashboard'
 import SignIn from './components/SignIn'
+import BrandMark from './components/BrandMark'
 import Onboarding from './components/Onboarding'
 import './styles/shell.css'
 
@@ -85,14 +86,17 @@ function readStatus(
       tone: 'warn',
       text: 'Keyword scoring',
       short: 'Keyword',
-      title: `No model key in use, so jobs are scored by keyword overlap. Add a key on the Profile tab for scores with reasons. ${boards}`,
+      title: `No scoring key in use, so roles are ranked by keyword overlap alone. Add a key on the Profile tab to get scores with reasons. ${boards}`,
     }
   }
+  // Says what you get, not which vendor supplies it. Whose model is doing the
+  // work is a settings detail, not something for the header to announce on
+  // every screen — and it changes on its own when the chain fails over.
   return {
     tone: 'ok',
-    text: `Scoring with ${LLM_LABELS[health.llm]}`,
-    short: LLM_LABELS[health.llm],
-    title: `${LLM_LABELS[health.llm]} is reading each posting and explaining its score. ${boards}`,
+    text: 'Scoring with reasons',
+    short: 'Scoring',
+    title: `Each posting is read in full and scored with a reason. Running on ${LLM_LABELS[health.llm]}. ${boards}`,
   }
 }
 
@@ -211,7 +215,7 @@ export default function App() {
         <div className="shell-boot" role="status" aria-live="polite">
           <div className="shell-boot-inner">
             <span className="shell-mark shell-mark-lg" aria-hidden="true">
-              <BrandGlyph />
+              <BrandMark size={14} />
             </span>
             <p className="shell-boot-text">Opening your workspace…</p>
             <span className="shell-boot-bar" aria-hidden="true">
@@ -240,7 +244,7 @@ export default function App() {
         <div className="shell-bar-inner">
           <div className="shell-brand">
             <span className="shell-mark" aria-hidden="true">
-              <BrandGlyph />
+              <BrandMark size={14} />
             </span>
             <span className="shell-wordmark">Shortlist</span>
           </div>
@@ -343,16 +347,3 @@ export default function App() {
 }
 
 // A navigator's arrow: the product points you at the next thing worth doing.
-function BrandGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M12 3.5 19 20.5 12 16.6 5 20.5z"
-        fill="currentColor"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}

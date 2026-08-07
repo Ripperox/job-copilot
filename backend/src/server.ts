@@ -19,6 +19,7 @@ import { encryptSecret, maskKey } from './crypto';
 import { llmConfigForUser, detectProvider, configForKey } from './user-llm';
 import { providerStatus } from './scrapers';
 import * as health from './health';
+import * as usage from './usage';
 import { llmProviderChain } from './llm';
 import { buildAuthUrl, exchangeCodeForIdentity } from './auth/google';
 import { setSessionCookie, clearSessionCookie, sessionCookieOptions } from './auth/session';
@@ -481,10 +482,11 @@ app.get('/api/sources', requireAuth, async (_req, res) => {
 // scraping all depend on third-party quotas that expire without warning, and
 // none of that was visible anywhere except stderr.
 app.get('/api/status', requireAuth, async (_req, res) => {
-  const [recorded, counts, queue] = await Promise.all([
+  const [recorded, counts, queue, apiUsage] = await Promise.all([
     health.all().catch(() => []),
     db.countBySource().catch(() => []),
     db.scrapeQueueStatus().catch(() => null),
+    usage.summary().catch(() => []),
   ]);
 
   const byName = new Map(recorded.map((h) => [h.name, h]));
@@ -538,6 +540,7 @@ app.get('/api/status', requireAuth, async (_req, res) => {
     scrapers: providerStatus(config),
     queue,
     scrapeTargets: config.scrapeCareerPages.length,
+    usage: apiUsage,
   });
 });
 

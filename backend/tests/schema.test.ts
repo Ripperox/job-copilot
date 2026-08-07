@@ -13,7 +13,7 @@ describe('schema', () => {
     );
     const names = rows.map((r) => r.table_name).sort();
     expect(names).toEqual(
-      ['demo_score', 'job_meta', 'jobs', 'outreach', 'profiles', 'scores', 'scrape_state', 'scrape_targets', 'source_health', 'user_keys', 'users'].sort(),
+      ['api_usage', 'demo_score', 'job_meta', 'jobs', 'outreach', 'profiles', 'scores', 'scrape_state', 'scrape_targets', 'source_health', 'user_keys', 'users'].sort(),
     );
   });
 

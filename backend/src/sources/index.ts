@@ -10,6 +10,7 @@ import { fetchJoobleJobs } from './jooble';
 import { fetchFantasticJobs } from './fantastic';
 import { fetchScrapedJobs } from './scraped';
 import * as health from '../health';
+import * as usage from '../usage';
 
 // Aggregates all configured job sources. Falls back to the mock set so the app
 // is usable with zero API keys. New sources (Greenhouse, Lever, ...) plug in here.
@@ -72,6 +73,9 @@ export async function gatherJobs(profile: Profile, config: Config): Promise<{ jo
   }
 
   const started = Date.now();
+  // One call per source per run — counted whether it succeeds or not, because a
+  // request that comes back 429 has still been spent against the plan.
+  tasks.forEach((t) => void usage.bump(t.label));
   const settled = await Promise.allSettled(tasks.map((t) => t.run()));
 
   const jobs: Job[] = [];

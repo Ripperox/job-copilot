@@ -291,12 +291,28 @@ export interface LlmRow {
   retryAfter: string | null
 }
 
+export interface UsageRow {
+  name: string
+  label: string
+  kind: 'model' | 'jobs' | 'scrape'
+  /** Requests allowed per window, or null where the plan sets no request cap. */
+  limit: number | null
+  window: 'day' | 'month'
+  note: string
+  used: number
+  /** Clamped to 1, so an overspent plan cannot overflow its bar. Null when uncapped. */
+  fraction: number | null
+  remaining: number | null
+  resetsAt: string
+}
+
 export interface SystemStatus {
   jobSources: HealthRow[]
   llm: LlmRow[]
   scrapers: { name: string; configured: boolean }[]
   queue: { total: number; enabled: number; dueNow: number; neverScraped: number; producing: number } | null
   scrapeTargets: number
+  usage: UsageRow[]
 }
 
 /** What is working right now — every third-party quota this app leans on. */

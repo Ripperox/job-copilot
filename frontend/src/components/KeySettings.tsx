@@ -75,7 +75,7 @@ export default function KeySettings({
     <section className="pf-sec">
       <h2 className="sec-title">Scoring key</h2>
       <p className="sec-sub">
-        Shortlist scores every role against your résumé with an LLM, and it runs on{' '}
+        Every role is read and scored against your résumé, and that runs on{' '}
         <strong>your own API key</strong> — so the usage, the limits and the logs stay
         yours. Paste a key from Groq, Google Gemini or Anthropic and the server works out
         which it is.{' '}
@@ -147,7 +147,7 @@ export default function KeySettings({
         <p className="pf-kp-note">
           {hasKey
             ? 'Replace it by pasting a new key below, or remove it to fall back to keyword-only scoring.'
-            : 'No key yet — jobs are scored with a keyword heuristic, and outreach uses a template. Add a key to switch on real LLM scoring.'}
+            : 'No key yet — roles are ranked by keyword overlap and outreach comes from a template. Add a key and each posting gets read properly, with a reason for its score.'}
         </p>
 
         <div className="pf-keyform">

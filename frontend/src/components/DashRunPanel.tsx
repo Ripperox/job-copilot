@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 // The run controls, and the minute they cost you.
 //
-// A fetch reads every job source and then scores each new posting with an LLM;
+// A fetch reads every job source and then scores each new posting;
 // 60–90 seconds is normal. The API answers exactly once, at the end, so there is
 // no honest way to show a percentage — inventing one would be a lie that gets
 // caught every time it stalls at 80%. What we can be truthful about is: how long

@@ -1,0 +1,127 @@
+/* =============================================================================
+   Allowances — what each outside service has spent, and what is left.
+
+   The bar is the whole point, so it gets the rules:
+     • It fills with SPENT, not remaining. A bar that empties as you use it
+       reads as a battery and invites the wrong glance; this is a gauge of
+       consumption and should get heavier as things get worse.
+     • Colour is earned, not decorative. Grey until 70%, amber to 90%, red
+       after. A row that is fine looks like every other row that is fine, so
+       the one in trouble is the only thing your eye lands on.
+     • No bar at all where there is no ceiling. A full-width track for an
+       uncapped API is a decoration that reads as information.
+   ============================================================================= */
+
+.ug {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.ug-group {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  padding: var(--s4);
+}
+
+.ug-gtitle {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.ug-gblurb {
+  margin: 0.15rem 0 var(--s4);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-prose);
+  color: var(--faint);
+  max-width: 62ch;
+}
+
+.ug-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.ug-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ug-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.ug-name {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text);
+  /* The note lives in a title attribute; signal that there is one to read. */
+  cursor: help;
+}
+
+.ug-count {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.ug-dim { color: var(--faint); }
+
+/* The track. Deliberately thin — this is a reference reading, not a dashboard
+   centrepiece, and eight of them stacked would otherwise dominate the page. */
+.ug-bar {
+  position: relative;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--bg-sunk);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.ug-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--grey);
+  /* Fills once, on load. Motion is feedback here: the bar arriving at its
+     value is what tells you the number is current. */
+  transition: width var(--dur-3) var(--ease), background var(--dur-2) var(--ease);
+}
+
+.ug-row.is-warn .ug-fill { background: var(--amber); }
+.ug-row.is-bad  .ug-fill { background: var(--red); }
+
+/* Amber and red are the only rows allowed to raise their voice, and they do it
+   in the caption rather than by shouting in the bar. */
+.ug-row.is-warn .ug-count { color: var(--amber); }
+.ug-row.is-bad  .ug-count { color: var(--red); }
+
+.ug-note {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-snug);
+  color: var(--faint);
+}
+
+.ug-skel {
+  display: block;
+  height: 3.5rem;
+  border-radius: var(--r);
+  margin-bottom: var(--s3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ug-fill { transition: none; }
+}

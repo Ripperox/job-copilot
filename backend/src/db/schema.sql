@@ -146,3 +146,21 @@ CREATE INDEX IF NOT EXISTS scrape_targets_due_idx ON scrape_targets (due_at) WHE
 CREATE INDEX IF NOT EXISTS scores_user_score_idx    ON scores (user_id, score DESC);
 CREATE INDEX IF NOT EXISTS job_meta_user_status_idx ON job_meta (user_id, status);
 CREATE INDEX IF NOT EXISTS jobs_created_at_idx      ON jobs (created_at DESC);
+
+-- Per-API request counters.
+--
+-- The status panel could say a provider was "ok" or "rate limited", but not how
+-- close to its ceiling it was — so the first warning of a spent quota was the
+-- moment everything stopped. These are OUR counts of requests we made, bucketed
+-- into the window the provider actually resets on (daily for the model APIs,
+-- monthly for the metered job boards). The provider's own accounting is
+-- authoritative; this is a close estimate, and the UI says so.
+--
+-- period is a text bucket rather than a date so both windows share one table:
+-- '2026-08-07' for daily, '2026-08' for monthly.
+CREATE TABLE IF NOT EXISTS api_usage (
+  name      TEXT    NOT NULL,
+  period    TEXT    NOT NULL,
+  requests  INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (name, period)
+);

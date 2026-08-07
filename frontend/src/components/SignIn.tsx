@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
+import BrandMark from './BrandMark'
 import type { ScoredJob } from '../api'
 import { getDemoJob, startGoogleLogin } from '../api'
 import { formatSalary } from '../lib/format'
@@ -57,12 +58,7 @@ export default function SignIn({ authEnabled, notice }: { authEnabled: boolean; 
         <div className="lp-top-inner">
           <div className="lp-brand">
             <span className="lp-mark" aria-hidden="true">
-              {/* A ranked list: the whole product in one mark. */}
-              <svg viewBox="0 0 16 16" fill="none">
-                <rect x="1" y="2" width="14" height="3" rx="1.5" fill="currentColor" />
-                <rect x="1" y="6.5" width="10" height="3" rx="1.5" fill="currentColor" opacity=".55" />
-                <rect x="1" y="11" width="6" height="3" rx="1.5" fill="currentColor" opacity=".3" />
-              </svg>
+              <BrandMark size={16} />
             </span>
             <span className="lp-wordmark">Shortlist</span>
           </div>
@@ -84,7 +80,7 @@ export default function SignIn({ authEnabled, notice }: { authEnabled: boolean; 
           <div className="lp-intro">
             <p className="lp-eyebrow">
               <span className="lp-dot" aria-hidden="true" />
-              Job search copilot
+              A workbench for the job hunt
             </p>
 
             <h1 className="lp-title">
@@ -92,9 +88,9 @@ export default function SignIn({ authEnabled, notice }: { authEnabled: boolean; 
             </h1>
 
             <p className="lp-lede">
-              Shortlist gathers roles from job boards and company career pages, scores
-              each one against your résumé with an LLM, and drafts the outreach, so your
-              evenings go to the handful actually worth applying to.
+              Shortlist gathers roles from job boards and company career pages, scores each
+              one against your résumé, and drafts the outreach — so your evenings go to
+              the handful actually worth applying to.
             </p>
           </div>
 

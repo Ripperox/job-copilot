@@ -1,4 +1,5 @@
 import SystemStatus from './SystemStatus'
+import ApiUsage from './ApiUsage'
 import { useEffect, useState, useRef } from 'react'
 import { ACCEPTED, ResumeFileError, readResumeFile } from '../lib/resume-file'
 import type { ReactNode } from 'react'
@@ -443,6 +444,17 @@ export default function ProfileView({
 
       <KeySettings onUnauthorized={onUnauthorized} />
 
+      {/* What the app is spending, then what is currently working. Both were
+          buried at the bottom of the danger zone, which put a routine reading
+          next to the one control on the page that cannot be undone. */}
+      <section className="pf-sec">
+        <ApiUsage />
+      </section>
+
+      <section className="pf-sec">
+        <SystemStatus />
+      </section>
+
       <section className="pf-sec pf-sec-danger">
         <h2 className="sec-title">Delete account</h2>
         <p className="sec-sub">
@@ -491,8 +503,7 @@ export default function ProfileView({
             )}
           </div>
         </div>
-            <SystemStatus />
-</section>
+      </section>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { Config } from './config';
+import * as usage from './usage';
 
 export type LLMProvider = 'cerebras' | 'gemini' | 'groq' | 'anthropic' | 'heuristic';
 
@@ -136,7 +137,15 @@ export function hasLLM(config: Config): boolean {
 // Uses the highest-preference provider this config has a key for; callers that
 // want failover walk llmProviderChain() and narrow with configForProvider().
 export async function llmComplete(prompt: string, config: Config, maxTokens = 500): Promise<string> {
-  switch (llmProvider(config)) {
+  const provider = llmProvider(config);
+  if (provider === 'heuristic') throw new Error('No LLM configured');
+
+  // Counted here because this is the one place every model request passes
+  // through, and counted BEFORE the call: a request that comes back 429 or 500
+  // has still been spent as far as most providers' daily counters go.
+  void usage.bump(provider);
+
+  switch (provider) {
     case 'groq':
       return groqComplete(prompt, config, maxTokens);
     case 'gemini':
@@ -145,8 +154,6 @@ export async function llmComplete(prompt: string, config: Config, maxTokens = 50
       return cerebrasComplete(prompt, config, maxTokens);
     case 'anthropic':
       return anthropicComplete(prompt, config, maxTokens);
-    default:
-      throw new Error('No LLM configured');
   }
 }
 
