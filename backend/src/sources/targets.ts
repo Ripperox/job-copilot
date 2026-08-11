@@ -136,4 +136,17 @@ export const CAREER_PAGE_TARGETS: string[] = [
   'https://www.svix.com/careers/',
   'https://inngest.com/careers',
   'https://www.hopsworks.ai/careers',
+
+  // --- aggregator boards with no API, added 2026-08-11 ---
+  //
+  // These four answered 200 to a plain GET, so Firecrawl can read them. The
+  // ones that did not are recorded in boards.ts with the reason: echojobs.io
+  // and remotive.io sit behind Cloudflare (403), remotists.com does not
+  // resolve, findwork.dev needs a key, and LinkedIn/Wellfound/Instahyre/
+  // CutShort are auth-walled — scraping those breaks their terms and gets the
+  // account banned, which costs more than the listings are worth.
+  'https://nocsdegree.com/jobs/',
+  'https://hasjob.co',
+  'https://remote-developer-jobs.com',
+  'https://hnjobs.emilburzo.com',
 ];

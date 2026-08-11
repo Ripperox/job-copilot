@@ -9,6 +9,7 @@ import { fetchJSearchJobs } from './jsearch';
 import { fetchJoobleJobs } from './jooble';
 import { fetchFantasticJobs } from './fantastic';
 import { fetchScrapedJobs } from './scraped';
+import { fetchBoardJobs } from './boards';
 import * as health from '../health';
 import * as usage from '../usage';
 
@@ -66,6 +67,21 @@ export async function gatherJobs(profile: Profile, config: Config): Promise<{ jo
       ),
     });
   }
+  // Free public remote boards — RemoteOK, Remotive, We Work Remotely. No keys,
+  // no Firecrawl credits, ~340 jobs a run. Registered as one task that fans out
+  // internally, then split back into per-board results so a board that goes
+  // quiet is visible in the health panel rather than lost in a total.
+  tasks.push({
+    label: 'boards',
+    run: async () => {
+      const results = await fetchBoardJobs();
+      for (const r of results) {
+        void health.recordOk(r.source, 'job', r.jobs.length);
+      }
+      return results.flatMap((r) => r.jobs);
+    },
+  });
+
   // Company career pages. Unlike the aggregators above, these carry roles that
   // are earlier and far less competed — often before they syndicate anywhere.
   if (config.scrapeCareerPages.length > 0) {

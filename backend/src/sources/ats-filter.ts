@@ -56,3 +56,36 @@ export function companyFromToken(token: string): string {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 }
+
+// ---------------------------------------------------------------------------
+// Engineering-title filter, for aggregator boards.
+//
+// The ATS boards in targets.ts are company-specific, so what comes back is
+// broadly relevant. Aggregators are not: RemoteOK's feed returned "Beekeeper
+// Academy of Achievement" and "General Staff Position", and Remotive answered
+// `category=software-dev` with inside-sales roles. Storing those costs database
+// rows and, worse, scoring budget — every junk row is a job the LLM might be
+// asked to read.
+//
+// Deliberately generous. A false negative silently hides a real job, which is
+// far more costly than a false positive that gets scored low and sinks. Titles
+// are matched on word boundaries so "Go" does not match "Goalkeeper".
+// ---------------------------------------------------------------------------
+
+const ENGINEERING_TITLE =
+  /\b(engineer|engineering|developer|programmer|software|sde|swe|backend|back[-\s]?end|frontend|front[-\s]?end|full[-\s]?stack|fullstack|devops|sre|platform|infrastructure|architect|data|ml|ai|machine\s?learning|qa|sdet|mobile|android|ios|web|cloud|security|api|database|dba)\b/i;
+
+/** Titles that contain an engineering word but are not engineering jobs. */
+const NOT_ENGINEERING =
+  /\b(sales|recruiter|recruiting|account\s+executive|marketing|copywriter|customer\s+success|support\s+agent|teacher|tutor|nurse|driver|cleaner|janitorial|beekeeper|writer|editor|designer\s+of\s+content)\b/i;
+
+export function isEngineeringTitle(title: string): boolean {
+  const t = String(title ?? '');
+  if (!t.trim()) return false;
+  if (NOT_ENGINEERING.test(t)) return false;
+  return ENGINEERING_TITLE.test(t);
+}
+
+export function filterEngineering<T extends { title: string }>(jobs: T[]): T[] {
+  return jobs.filter((j) => isEngineeringTitle(j.title));
+}

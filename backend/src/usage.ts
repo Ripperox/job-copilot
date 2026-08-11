@@ -116,6 +116,28 @@ export function quotas(): Quota[] {
       note: 'Public board API. No key, no published cap.',
     },
 
+    // ---- free remote boards (no key, no cap) ----
+    // Listed so their volume is visible next to the metered sources. RemoteOK
+    // in particular looks generous at ~100 entries a run and yields about 3
+    // after the engineering filter — its public feed is largely SEO spam
+    // ("YOUR JOB DESCRIPTION HERE", "Page Not Found"). Showing the real number
+    // is the point of this panel.
+    {
+      name: 'remoteok', label: 'RemoteOK', kind: 'jobs', window: 'day',
+      limit: envLimit('REMOTEOK_DAILY_LIMIT', null),
+      note: 'Free public JSON feed, no key. Low signal-to-noise; most entries are not jobs.',
+    },
+    {
+      name: 'remotive', label: 'Remotive', kind: 'jobs', window: 'day',
+      limit: envLimit('REMOTIVE_DAILY_LIMIT', null),
+      note: 'Free public JSON feed. Hard-capped at 20 results server-side whatever query is sent.',
+    },
+    {
+      name: 'weworkremotely', label: 'We Work Remotely', kind: 'jobs', window: 'day',
+      limit: envLimit('WWR_DAILY_LIMIT', null),
+      note: 'Five category RSS feeds, deduplicated. The best of the free boards by a wide margin.',
+    },
+
     // ---- career-page reading ----
     {
       name: 'scraped', label: 'Career pages', kind: 'scrape', window: 'day',
