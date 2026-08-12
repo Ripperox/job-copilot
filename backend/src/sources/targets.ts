@@ -149,4 +149,41 @@ export const CAREER_PAGE_TARGETS: string[] = [
   'https://hasjob.co',
   'https://remote-developer-jobs.com',
   'https://hnjobs.emilburzo.com',
+
+  // --- large enterprises with no readable API, added 2026-08-12 ---
+  //
+  // Requested as a batch: Cloudera, Deutsche Bank, Warner Bros, YASH, EY,
+  // Oracle, Adobe. None of the seven is on Greenhouse, Lever or Ashby — all
+  // three APIs were probed and every candidate token 404'd. What they run:
+  //
+  //   Cloudera       Workday        → sources/workday.ts  (keyless JSON, 82 posts)
+  //   Oracle         Oracle RC      → sources/oracle.ts   (keyless JSON, 1,556)
+  //   Adobe          Phenom         → here
+  //   Warner Bros    Phenom         → here
+  //   EY             SuccessFactors → here
+  //   YASH           SuccessFactors → here
+  //   Deutsche Bank  in-house       → here
+  //
+  // Cloudera and Oracle are deliberately NOT in this list: they answer with JSON
+  // and no key, so scraping them would spend a credit per page to get worse data
+  // than the API already returns for free.
+  //
+  // UPDATE 2026-08-12: Adobe and Warner Bros were HERE and have been removed.
+  // Phenom's API does work — POST /widgets with ddoKey=refineSearch and
+  // jobs=true, the flag that was missing on the first attempt — but every
+  // applyUrl it returns points at Workday, and Phenom only carries a truncated
+  // teaser where Workday has the full description. So the skin was skipped
+  // entirely and the tenant read straight out of the applyUrl. Adobe, Warner
+  // Bros and Cisco are all Workday tenants in workday.ts now. Worth checking
+  // for any future Phenom site before spending a credit on it.
+  //
+  // URLs picked by what actually renders server-side, measured rather than
+  // assumed: EY's India search carries 108 job titles in the raw HTML, so it
+  // reads well. Deutsche Bank's renders entirely client-side — zero titles in
+  // source — and is included on the strength of Firecrawl executing JS. If it
+  // yields nothing, the queue's backoff retires it without help, which is what
+  // that mechanism is for.
+  'https://careers.ey.com/ey/search/?q=&locationsearch=India',
+  'https://www.yash.com/careers/current-openings/',
+  'https://careers.db.com/professionals/search-roles/',
 ];

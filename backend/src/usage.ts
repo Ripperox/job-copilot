@@ -115,6 +115,26 @@ export function quotas(): Quota[] {
       limit: envLimit('ASHBY_DAILY_LIMIT', null),
       note: 'Public board API. No key, no published cap.',
     },
+    {
+      name: 'workday', label: 'Workday', kind: 'jobs', window: 'day',
+      limit: envLimit('WORKDAY_DAILY_LIMIT', null),
+      note: 'Undocumented but keyless JSON endpoint behind every myworkdayjobs.com site. Unpublished, so it could change without notice.',
+    },
+    {
+      name: 'oracle', label: 'Oracle Recruiting', kind: 'jobs', window: 'day',
+      limit: envLimit('ORACLE_DAILY_LIMIT', null),
+      note: 'Oracle Recruiting Cloud REST endpoint, no key. Five keyword searches per tenant per run, deduplicated. Covers Oracle, JPMorgan, BNY and Uber.',
+    },
+    {
+      name: 'smartrecruiters', label: 'SmartRecruiters', kind: 'jobs', window: 'day',
+      limit: envLimit('SMARTRECRUITERS_DAILY_LIMIT', null),
+      note: 'Public documented API, no key. The only enterprise board here that does not need reverse engineering.',
+    },
+    {
+      name: 'mynexthire', label: 'MyNextHire', kind: 'jobs', window: 'day',
+      limit: envLimit('MYNEXTHIRE_DAILY_LIMIT', null),
+      note: 'Indian ATS behind Swiggy and ShareChat. One request returns every open requisition with its description.',
+    },
 
     // ---- free remote boards (no key, no cap) ----
     // Listed so their volume is visible next to the metered sources. RemoteOK

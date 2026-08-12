@@ -10,6 +10,10 @@ import { fetchJoobleJobs } from './jooble';
 import { fetchFantasticJobs } from './fantastic';
 import { fetchScrapedJobs } from './scraped';
 import { fetchBoardJobs } from './boards';
+import { fetchWorkdayJobs } from './workday';
+import { fetchOracleJobs } from './oracle';
+import { fetchSmartRecruitersJobs } from './smartrecruiters';
+import { fetchMyNextHireJobs } from './mynexthire';
 import * as health from '../health';
 import * as usage from '../usage';
 
@@ -77,6 +81,54 @@ export async function gatherJobs(profile: Profile, config: Config): Promise<{ jo
       const results = await fetchBoardJobs();
       for (const r of results) {
         void health.recordOk(r.source, 'job', r.jobs.length);
+      }
+      return results.flatMap((r) => r.jobs);
+    },
+  });
+
+  // Enterprise ATS platforms. Large employers do not use Greenhouse/Lever/Ashby
+  // — they run Workday, Oracle Recruiting Cloud, SuccessFactors or Phenom. The
+  // first two answer with JSON and no key, so they are read directly here rather
+  // than spent as Firecrawl credits; the other two only render HTML and stay in
+  // the career-page queue.
+  tasks.push({
+    label: 'workday',
+    run: async () => {
+      const results = await fetchWorkdayJobs();
+      for (const r of results) {
+        void health.recordOk(`workday:${r.company.toLowerCase()}`, 'job', r.jobs.length);
+      }
+      return results.flatMap((r) => r.jobs);
+    },
+  });
+  tasks.push({
+    label: 'oracle',
+    run: async () => {
+      const results = await fetchOracleJobs();
+      for (const r of results) {
+        void health.recordOk(`oracle:${r.company.toLowerCase().replace(/\s+/g, '')}`, 'job', r.jobs.length);
+      }
+      return results.flatMap((r) => r.jobs);
+    },
+  });
+
+  tasks.push({
+    label: 'smartrecruiters',
+    run: async () => {
+      const results = await fetchSmartRecruitersJobs();
+      for (const r of results) {
+        void health.recordOk(`smartrecruiters:${r.company.toLowerCase().replace(/\s+/g, '')}`, 'job', r.jobs.length);
+      }
+      return results.flatMap((r) => r.jobs);
+    },
+  });
+
+  tasks.push({
+    label: 'mynexthire',
+    run: async () => {
+      const results = await fetchMyNextHireJobs();
+      for (const r of results) {
+        void health.recordOk(`mynexthire:${r.company.toLowerCase()}`, 'job', r.jobs.length);
       }
       return results.flatMap((r) => r.jobs);
     },

@@ -55,10 +55,27 @@ export const config = {
   // Curated for one candidate profile: companies that hire in India or hire
   // genuinely globally-remote. Postings are location-filtered again in
   // ats-filter.ts, because these boards are large and mostly US-only.
+  //
+  // Every token added on 2026-08-12 was verified by calling the board API and
+  // counting jobs; the count is in the comment beside it. A token that answers
+  // 200 with an EMPTY board is worse than no token — it reads as healthy in the
+  // status panel while contributing nothing. Optiver is the live example:
+  // boards-api returns 200 for `optiver` and zero jobs in every department, so
+  // it is a scrape target in targets.ts instead of a board here.
   greenhouseBoards: list(
     process.env.GREENHOUSE_BOARDS,
     'phonepe,groww,druva,postman,turing,mongodb,databricks,rubrik,adyen,bitgo,gitlab,mercury,vercel,'+
-    'tailscale,planetscale,clickhouse,temporaltechnologies',
+    'tailscale,planetscale,clickhouse,temporaltechnologies,'+
+    // --- added 2026-08-12: quant, HFT and fintech ---
+    'towerresearchcapital,'+          // 79
+    'gravitonresearchcapital,'+       // 21
+    'alphagrepsecurities,'+           // 16
+    'quantboxresearchpte,'+           // 6 — EU-hosted board, global API serves it
+    'worldquant,'+                    // 101
+    'imc,'+                           // 165
+    'arcesiumllc,'+                   // 35
+    'razorpaysoftwareprivatelimited,'+// 21
+    'inmobi',                         // 68
   ),
   leverBoards: list(process.env.LEVER_BOARDS, 'meesho,porter,zeta,mindtickle,cred'),
   ashbyBoards: list(
