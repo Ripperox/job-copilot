@@ -1,10 +1,12 @@
 // Point at a deployed backend with VITE_API_URL (e.g. https://job-copilot.onrender.com/api);
-// falls back to the local backend in dev.
-export const API =
+  // falls back to the local backend in dev.
+  export const API =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ||
   'http://localhost:4500/api'
 
-export type SalaryPeriod = 'year' | 'month' | 'hour'
+  export type RunPhase = 'idle' | 'fetching' | 'rescoring'
+
+  export type SalaryPeriod = 'year' | 'month' | 'hour'
 
 export interface SalaryFloor {
   amount: number | null

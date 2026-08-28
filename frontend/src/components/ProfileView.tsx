@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import SystemStatus from './SystemStatus'
 import ApiUsage from './ApiUsage'
@@ -259,7 +259,7 @@ export default function ProfileView({
 
   // Keyboard shortcut Cmd+S / Ctrl+S to save
   useEffect(() => {
-    const onKey = (e: window.KeyboardEvent) => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
         void handleSave()
