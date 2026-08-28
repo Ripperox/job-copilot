@@ -291,7 +291,7 @@ function JobCard({
           aria-controls={open ? bodyId : undefined}
           onClick={() => setOpen((v) => !v)}
         >
-          <span className="jc-score" title={job.score == null ? 'Not scored yet' : `Scores ${job.score} out of 100`}>
+          <span className="jc-score" title={job.score == null ? 'Not scored yet' : `Scores ${job.score} out of 100 — 80+ = apply, 50-79 = partial, <50 = wrong level/stack`}>
             <span className="jc-score-n u-num">
               {job.score == null ? '—' : job.score}
             </span>
@@ -328,8 +328,8 @@ function JobCard({
           <span className={`jc-verdict${job.reason ? '' : ' is-none'}`}>
             {job.reason ??
               (job.score == null
-                ? 'Not scored yet'
-                : 'Scored, but no written reason — that needs a model key')}
+                ? 'Not scored yet — save your résumé and press Re-score.'
+                : 'Scored by keyword match (no model key) — add a scoring key for written reasons.')}
           </span>
 
           <span className="jc-tail">

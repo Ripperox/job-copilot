@@ -4,11 +4,19 @@ export const API =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ||
   'http://localhost:4500/api'
 
+export type SalaryPeriod = 'year' | 'month' | 'hour'
+
+export interface SalaryFloor {
+  amount: number | null
+  currency: string
+  period: SalaryPeriod
+}
+
 export interface Profile {
   resumeText: string
   roles: string[]
   locations: string[]
-  salaryFloorLPA: number | null
+  salaryFloor: SalaryFloor
   maxYoE: number | null
   mustHaves: string[]
   cvVariants: string[]
@@ -143,6 +151,18 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+const cache = new Map<string, { data: unknown; expires: number }>()
+
+export function invalidateCache(prefix?: string): void {
+  if (!prefix) {
+    cache.clear()
+    return
+  }
+  for (const key of cache.keys()) {
+    if (key.startsWith(prefix)) cache.delete(key)
+  }
+}
+
 const inFlight = new Map<string, Promise<unknown>>()
 
 function dedupe<T>(key: string, run: () => Promise<T>): Promise<T> {
@@ -153,10 +173,20 @@ function dedupe<T>(key: string, run: () => Promise<T>): Promise<T> {
   return p as Promise<T>
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  // Only GETs are shared; a POST or PATCH must always be sent.
+async function request<T>(path: string, init?: RequestInit, ttlMs = 15000): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase()
-  if (method === 'GET') return dedupe(path, () => rawRequest<T>(path, init))
+  if (method === 'GET') {
+    const cached = cache.get(path)
+    if (cached && cached.expires > Date.now()) {
+      return cached.data as T
+    }
+    return dedupe(path, async () => {
+      const data = await rawRequest<T>(path, init)
+      cache.set(path, { data, expires: Date.now() + ttlMs })
+      return data
+    })
+  }
+  invalidateCache()
   return rawRequest<T>(path, init)
 }
 

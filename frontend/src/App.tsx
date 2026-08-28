@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import type { Health, User } from './api'
+import type { Health, User, RunPhase } from './api'
 import { API, getHealth, getJobs, getMe, logout, setStoredToken } from './api'
 import ProfileView from './components/ProfileView'
 import Dashboard from './components/Dashboard'
@@ -110,6 +110,10 @@ export default function App() {
   const [setupHidden, setSetupHidden] = useState(readSetupHidden)
   // null until the checklist has worked out where the account stands.
   const [setupDone, setSetupDone] = useState<boolean | null>(null)
+  // Global fetch/rescore phase — lives at App level so it survives tab switches.
+  // Without this, switching tabs resets the button to "idle" while the backend
+  // is still working, causing the confusing "A fetch is already running" error.
+  const [globalPhase, setGlobalPhase] = useState<RunPhase>('idle')
 
   const still = useReducedMotion()
 
@@ -345,6 +349,8 @@ export default function App() {
               view={tab}
               onUnauthorized={onUnauthorized}
               onSwitchView={goTo}
+              globalPhase={globalPhase}
+              setGlobalPhase={setGlobalPhase}
             />
           )}
         </div>

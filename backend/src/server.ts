@@ -9,7 +9,7 @@ import { config, authConfigured } from './config';
 import { db, LOCAL_USER_ID } from './db';
 import { query, closePool } from './db/pool';
 import { applySchema } from './db/migrate';
-import { Job, Profile, Outreach, JobMeta, JOB_STATUSES } from './types';
+import { Job, Profile, Outreach, JobMeta, JOB_STATUSES, SalaryFloor } from './types';
 import { gatherJobs } from './sources';
 import { scoreJob } from './scoring';
 import { scoreJobsBatched } from './batch-scoring';
@@ -281,11 +281,28 @@ app.get('/api/profile', async (req, res) => {
 
 app.put('/api/profile', async (req, res) => {
   const b = req.body ?? {};
+  // Accept the new structured floor (currency + period) and fall back to the
+  // old flat LPA so older clients and the test fixtures keep working.
+  const floor = b.salaryFloor;
+  const legacy = b.salaryFloorLPA;
+  const salaryFloor: SalaryFloor = {
+    amount:
+      floor?.amount != null
+        ? Number(floor.amount)
+        : legacy != null && legacy !== ''
+          ? Number(legacy)
+          : null,
+    currency: typeof floor?.currency === 'string' && floor.currency ? floor.currency : 'INR',
+    period:
+      floor?.period === 'month' || floor?.period === 'hour'
+        ? floor.period
+        : 'year',
+  };
   const profile: Profile = {
     resumeText: String(b.resumeText ?? ''),
     roles: Array.isArray(b.roles) ? b.roles : [],
     locations: Array.isArray(b.locations) ? b.locations : [],
-    salaryFloorLPA: b.salaryFloorLPA == null ? null : Number(b.salaryFloorLPA),
+    salaryFloor,
     maxYoE: b.maxYoE == null ? 3 : Number(b.maxYoE),
     mustHaves: Array.isArray(b.mustHaves) ? b.mustHaves : [],
     cvVariants: Array.isArray(b.cvVariants) && b.cvVariants.length ? b.cvVariants : ['Backend', 'AI', 'Blockchain'],

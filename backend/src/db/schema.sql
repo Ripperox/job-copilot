@@ -33,6 +33,12 @@ CREATE TABLE IF NOT EXISTS profiles (
   must_haves       TEXT[] NOT NULL DEFAULT '{}',
   cv_variants      TEXT[] NOT NULL DEFAULT '{}'
 );
+-- Currency-aware salary floor. Replaces the India-only LPA field. The legacy
+-- salary_floor_lpa column is kept so existing rows survive the migration: it is
+-- read as the default amount (INR/year) until a profile is next saved.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS salary_floor_amount DOUBLE PRECISION;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS salary_currency TEXT NOT NULL DEFAULT 'INR';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS salary_period   TEXT NOT NULL DEFAULT 'year';
 
 CREATE TABLE IF NOT EXISTS scores (
   user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -22,7 +22,7 @@ const profile = (resume: string): Profile => ({
   resumeText: resume,
   roles: ['Backend Engineer'],
   locations: ['Remote'],
-  salaryFloorLPA: 15,
+  salaryFloor: { amount: 1_500_000, currency: 'INR', period: 'year' },
   maxYoE: 3,
   mustHaves: ['Node'],
   cvVariants: ['Backend'],

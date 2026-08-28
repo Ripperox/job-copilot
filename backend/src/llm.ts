@@ -1,7 +1,7 @@
 import { Config } from './config';
 import * as usage from './usage';
 
-export type LLMProvider = 'cerebras' | 'gemini' | 'groq' | 'anthropic' | 'heuristic';
+export type LLMProvider = 'nemotron' | 'cerebras' | 'gemini' | 'groq' | 'anthropic' | 'heuristic';
 
 // Carries the provider's HTTP status so callers can tell "this key is wrong"
 // (401/403) from "this key is fine but out of quota right now" (429).
@@ -78,6 +78,7 @@ export function terminalReason(e: unknown): string {
 // (extracting career pages + scoring a few hundred jobs daily) is large enough
 // that the free ceiling is the binding constraint. Measured 2026-08-04:
 //
+//   nemotron    NVIDIA free tier — generous, OpenAI-compatible, reasoning support
 //   groq        ~100,000 tokens/day, 1,000 req/day   <- most usable free tier
 //   gemini            ~20 requests/day on 3.6-flash  (exhausts almost at once)
 //   cerebras    key authenticates, but every model in the catalog returns
@@ -89,6 +90,7 @@ export function terminalReason(e: unknown): string {
 // Cerebras caps context near 8k tokens, so batch sizes are smaller for it —
 // see PAGES_PER_REQUEST and BATCH_SIZE.
 const PREFERENCE: Exclude<LLMProvider, 'heuristic'>[] = [
+  'nemotron',
   'groq',
   'gemini',
   'cerebras',
@@ -96,6 +98,7 @@ const PREFERENCE: Exclude<LLMProvider, 'heuristic'>[] = [
 ];
 
 export function keyFor(config: Config, provider: LLMProvider): string {
+  if (provider === 'nemotron') return config.nemotronApiKey;
   if (provider === 'cerebras') return config.cerebrasApiKey;
   if (provider === 'groq') return config.groqApiKey;
   if (provider === 'gemini') return config.geminiApiKey;
@@ -118,6 +121,7 @@ export function llmProviderChain(config: Config): Exclude<LLMProvider, 'heuristi
 export function configForProvider(base: Config, provider: LLMProvider): Config {
   return {
     ...base,
+    nemotronApiKey: provider === 'nemotron' ? base.nemotronApiKey : '',
     cerebrasApiKey: provider === 'cerebras' ? base.cerebrasApiKey : '',
     groqApiKey: provider === 'groq' ? base.groqApiKey : '',
     geminiApiKey: provider === 'gemini' ? base.geminiApiKey : '',
@@ -146,6 +150,8 @@ export async function llmComplete(prompt: string, config: Config, maxTokens = 50
   void usage.bump(provider);
 
   switch (provider) {
+    case 'nemotron':
+      return nemotronComplete(prompt, config, maxTokens);
     case 'groq':
       return groqComplete(prompt, config, maxTokens);
     case 'gemini':
@@ -240,4 +246,57 @@ async function anthropicComplete(prompt: string, config: Config, maxTokens: numb
   if (!resp.ok) throw new LLMError(`Anthropic ${resp.status}: ${await resp.text()}`, resp.status, retryAfterMs(resp));
   const data: any = await resp.json();
   return data.content?.[0]?.text ?? '';
+}
+
+// Nemotron 3 Ultra on NVIDIA's OpenAI-compatible endpoint.
+// Supports reasoning (thinking) mode — we stream and concatenate both
+// reasoning_content and content deltas so nothing is lost.
+async function nemotronComplete(prompt: string, config: Config, maxTokens: number): Promise<string> {
+  const resp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${config.nemotronApiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.nemotronModel,
+      temperature: 1.0,
+      top_p: 0.95,
+      max_tokens: Math.min(maxTokens, 16384),
+      messages: [{ role: 'user', content: prompt }],
+      extra_body: { chat_template_kwargs: { enable_thinking: true } },
+      stream: true,
+    }),
+  });
+  if (!resp.ok) throw new LLMError(`Nemotron ${resp.status}: ${await resp.text()}`, resp.status, retryAfterMs(resp));
+
+  const reader = resp.body?.getReader();
+  if (!reader) throw new Error('Nemotron: no response body');
+
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let fullReasoning = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    for (const line of chunk.split('\n')) {
+      if (!line.startsWith('data: ')) continue;
+      const dataStr = line.slice(6).trim();
+      if (dataStr === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(dataStr);
+        const delta = parsed.choices?.[0]?.delta;
+        if (!delta) continue;
+        if (delta.reasoning_content) fullReasoning += delta.reasoning_content;
+        if (delta.content) fullContent += delta.content;
+      } catch {
+        // ignore parse errors on partial chunks
+      }
+    }
+  }
+
+  // Prepend reasoning if present (helps with debugging & transparency)
+  return fullReasoning ? `<thinking>\n${fullReasoning}\n</thinking>\n\n${fullContent}` : fullContent;
 }

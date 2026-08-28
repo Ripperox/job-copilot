@@ -10,7 +10,7 @@ const profile: Profile = {
   resumeText: 'Backend engineer. Node.js, TypeScript, PostgreSQL.',
   roles: ['Backend Engineer'],
   locations: ['Remote'],
-  salaryFloorLPA: null,
+  salaryFloor: { amount: null, currency: 'INR', period: 'year' },
   maxYoE: 3,
   mustHaves: ['Node', 'SQL'],
   cvVariants: ['Backend', 'AI', 'Blockchain'],

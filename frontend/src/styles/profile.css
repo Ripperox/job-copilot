@@ -1,96 +1,312 @@
 /* =============================================================================
-   Shortlist — profile / settings
-   Owns: ProfileView, KeySettings.
-   Every value here resolves to a token from styles/system.css.
-
-   WHY IT LOOKS LIKE THIS (v3)
-   A settings page, so it borrows the shape settings pages have earned: a
-   narrow reading column, sections separated by rules rather than by boxes,
-   and one setting per row with its explanation on the left and its control on
-   the right.
-
-   v2 put that two-column row inside a full-width page, so on a 1440px screen
-   the controls floated in the middle and the right third of every row was
-   empty. The column is now capped at a width you can actually read a
-   paragraph in, and the résumé box — the one thing here that benefits from
-   size — gets the full width of it.
+   Shortlist — Profile & Settings Styling (Elevated Modern Design System)
    ============================================================================= */
 
-.pf {
+.pf-app {
   display: flex;
   flex-direction: column;
   gap: var(--s6);
-  /* A reading column, but a generous one: narrow enough that a paragraph of
-     help text is readable, wide enough that a 1440px screen does not look
-     abandoned to the right of it. */
-  max-width: 62rem;
-  min-width: 0;
+  position: relative;
+  padding-bottom: var(--s8);
 }
 
-/* --- head --- */
+/* --- Floating Save Bar --- */
+.pf-floating-bar {
+  position: fixed;
+  bottom: var(--s4);
+  left: 50%;
+  transform: translateX(-50%) translateY(120%);
+  z-index: 50;
+  width: calc(100% - var(--s6));
+  max-width: 600px;
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+}
 
-.pf-head {
+.pf-floating-bar.is-visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pf-floating-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: 0.65rem 1rem;
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: saturate(180%) blur(16px);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  border: 1px solid var(--accent-line);
+  box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line-strong);
+}
+
+.pf-floating-text {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.pf-saved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--score-hi);
+  font-weight: 600;
+}
+
+.pf-floating-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.pf-kbd-hint {
+  font-size: var(--fs-xs);
+  color: var(--faint);
+  font-family: var(--font-mono);
+}
+
+.pf-btn-save-sm {
+  padding: 0.35rem 0.8rem;
+  font-size: var(--fs-xs);
+  border-radius: var(--r-sm);
+}
+
+/* --- Section Containers --- */
+.pf-sec {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  padding-bottom: var(--s4);
-  border-bottom: 1px solid var(--line);
+  gap: var(--s4);
+  padding: var(--s5);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  transition: border-color var(--dur-2) var(--ease);
 }
 
-.pf-h1 {
-  font-size: var(--fs-display);
+.pf-sec:hover {
+  border-color: color-mix(in srgb, var(--line) 80%, var(--accent) 20%);
+}
+
+.pf-sec-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+}
+
+.sec-title {
+  font-size: var(--fs-h2);
   font-weight: 600;
-  letter-spacing: -0.022em;
   color: var(--text);
+  letter-spacing: -0.015em;
+  margin-bottom: var(--s1);
 }
 
-.pf-lede {
-  font-size: var(--fs-body);
+.sec-sub {
+  font-size: var(--fs-sm);
   line-height: var(--lh-prose);
   color: var(--muted);
   max-width: 68ch;
 }
 
-.pf-loading {
+.pf-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+
+.pf-badge-ok {
+  background: rgba(78, 201, 142, 0.12);
+  border-color: rgba(78, 201, 142, 0.28);
+  color: var(--score-hi);
+}
+
+/* --- Profile Summary (what drives matching) --- */
+.pf-summary {
+  background: var(--bg-sunk);
+  border-color: var(--line-soft);
+}
+
+.pf-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--s3);
+  padding: var(--s3);
+  background: var(--panel);
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+}
+
+.pf-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.pf-summary-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pf-summary-val {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  word-break: break-word;
+  line-height: var(--lh-prose);
+}
+
+.pf-summary-val.pf-summary-ok {
+  color: var(--score-hi);
+  font-weight: 500;
+}
+
+.pf-summary-val.pf-summary-missing {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.pf-summary-hint {
+  margin: var(--s3) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  line-height: var(--lh-prose);
+}
+
+/* --- Résumé Upload Drop Zone --- */
+.pf-drop {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s4) var(--s5);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(
+      100% 120% at 50% 0%,
+      color-mix(in srgb, var(--accent) 4%, transparent) 0%,
+      transparent 70%
+    ),
+    var(--bg-sunk);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.pf-drop:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-sunk));
+}
+
+.pf-drop.is-over {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  box-shadow: 0 0 20px -4px var(--accent-glow);
+}
+
+.pf-drop-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.pf-drop-info {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.pf-drop-input {
+  display: none;
+}
+
+.pf-drop-btn {
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pf-drop-btn:hover:not(:disabled) {
+  background: var(--panel-3);
+  border-color: var(--accent);
+}
+
+.pf-drop-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.pf-drop-hint {
+  font-size: var(--fs-sm);
+  color: var(--muted);
   display: flex;
   align-items: center;
   gap: var(--s2);
-  padding: var(--s7) 0;
-  font-size: var(--fs-sm);
-  color: var(--muted);
+  flex-wrap: wrap;
 }
 
-.pf-alert {
-  padding: var(--s3);
-  border-radius: var(--r);
-  background: rgba(211, 112, 110, 0.1);
-  border: 1px solid rgba(211, 112, 110, 0.3);
-  border-left: 2px solid var(--red);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-snug);
-  color: #e9b0af;
+.pf-file-pill {
+  font-size: var(--fs-xs);
+  padding: 0.15rem 0.5rem;
+  background: var(--panel-2);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-sm);
+  color: var(--accent);
 }
 
-/* --- section --- */
+.pf-drop-err {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  background: rgba(211, 112, 110, 0.12);
+  border: 1px solid rgba(211, 112, 110, 0.25);
+  color: var(--red);
+  font-size: var(--fs-sm);
+}
 
-.pf-sec {
+/* --- Document Preview Textarea --- */
+.pf-doc {
   display: flex;
   flex-direction: column;
-  gap: var(--s4);
-}
-
-.pf-sec .sec-sub {
-  margin-top: calc(var(--s3) * -1);
-}
-
-/* --- the résumé box ---
-   The one field here that earns real estate: it is the document every score
-   is computed against, and you paste a whole CV into it. */
-
-.pf-doc {
+  border-radius: var(--r);
   border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--panel);
+  background: var(--bg-sunk);
   overflow: hidden;
 }
 
@@ -100,164 +316,333 @@
   justify-content: space-between;
   gap: var(--s3);
   padding: var(--s2) var(--s3);
-  border-bottom: 1px solid var(--line);
   background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
 }
 
 .pf-doc-name {
   font-size: var(--fs-xs);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-2);
+}
+
+.pf-doc-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.pf-btn-ghost-sm {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+}
+
+.pf-btn-ghost-sm:hover {
+  text-decoration: underline;
 }
 
 .pf-doc-meta {
   font-size: var(--fs-xs);
   color: var(--faint);
-  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .pf-doc-area {
-  display: block;
   width: 100%;
-  border: 0;
-  background: var(--bg-sunk);
   padding: var(--s3);
-  font-family: var(--font-sans);
-  font-size: var(--fs-body);
-  line-height: var(--lh-prose);
+  background: transparent;
+  border: 0;
   color: var(--text);
-  min-height: 15rem;
-}
-
-.pf-doc-area::placeholder {
-  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  resize: vertical;
+  min-height: 180px;
+  outline: none;
 }
 
 .pf-doc-area:focus {
-  outline: none;
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  background: color-mix(in srgb, var(--panel) 50%, var(--bg-sunk));
 }
 
-/* --- the settings register --- */
-
+/* --- Settings Rows & Tag Inputs --- */
 .pf-reg {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--line-soft);
+  gap: var(--s4);
 }
 
 .pf-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  grid-template-columns: 16rem minmax(0, 1fr);
   gap: var(--s5);
   align-items: start;
-  padding: var(--s4) 0;
+  padding: var(--s3) 0;
   border-bottom: 1px solid var(--line-soft);
 }
 
-.pf-rowkey {
-  min-width: 0;
+.pf-row:last-child {
+  border-bottom: 0;
 }
 
 .pf-key {
-  display: block;
   font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text);
+  display: block;
   margin-bottom: 2px;
 }
 
 .pf-note {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   line-height: var(--lh-snug);
   color: var(--muted);
-  max-width: 46ch;
 }
 
-.pf-rowval {
-  min-width: 0;
+/* Interactive Tag Box */
+.pf-tag-box {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-}
-
-.pf-input {
-  width: 100%;
+  gap: 6px;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r);
   background: var(--bg-sunk);
   border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  padding: 0.42rem 0.6rem;
-  font-family: var(--font-sans);
-  font-size: var(--fs-body);
-  line-height: 1.5;
-  color: var(--text);
-  transition: border-color var(--dur-2) var(--ease);
+  transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
+  cursor: text;
 }
 
-.pf-input::placeholder {
-  color: var(--faint);
+.pf-tag-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
-.pf-input:focus {
-  border-color: var(--accent-line);
+.pf-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 
-.pf-input[type='number'] {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.pf-num {
+.pf-tag-chip {
   display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  animation: u-rise 0.15s ease both;
+}
+
+.pf-tag-text {
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-tag-del {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.pf-tag-del:hover {
+  color: var(--red);
+  background: rgba(211, 112, 110, 0.2);
+}
+
+.pf-tag-input {
+  flex: 1;
+  min-width: 120px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  outline: none;
+  padding: 0.1rem 0;
+}
+
+.pf-tag-hint {
+  font-size: 11px;
+  color: var(--faint);
+  margin: 0;
+}
+
+.pf-tag-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--s1);
+  padding-top: var(--s1);
+  border-top: 1px solid var(--line-soft);
+}
+
+.pf-tag-count {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* Numeric Input Controls */
+.pf-num-control {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--r);
+  background: var(--bg-sunk);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  transition: border-color var(--dur-1) var(--ease);
+}
+
+.pf-num-control:focus-within {
+  border-color: var(--accent);
+}
+
+.pf-num-input {
+  width: 5.5rem;
+  padding: var(--s2) var(--s3);
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.pf-unit-badge {
+  padding: var(--s2) var(--s3);
+  background: var(--panel-2);
+  border-left: 1px solid var(--line);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* Required field indicator */
+.pf-req {
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  margin-left: var(--s1);
+  vertical-align: super;
+}
+
+/* Clear button for numeric inputs */
+.pf-num-control {
+  position: relative;
+}
+.pf-clear-btn {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.25rem;
+  height: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+.pf-clear-btn:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+/* Floating bar completion indicator */
+.pf-completion {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.pf-completion svg {
+  color: var(--score-hi);
+}
+
+/* Salary Floor Row (amount + currency + period) */
+.pf-salary {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
 }
 
-.pf-num .pf-input {
-  width: 6.5rem;
+.pf-currency {
+  width: auto;
+  min-width: 5rem;
 }
 
-.pf-unit {
-  font-size: var(--fs-sm);
-  color: var(--muted);
-}
-
-/* Echo of what the comma syntax actually parsed to. */
-.pf-tokens {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.pf-token {
-  font-size: var(--fs-xs);
-  padding: 0.16rem 0.45rem;
-  border-radius: var(--r-sm);
-  background: var(--panel-2);
+.pf-seg {
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--line);
-  color: var(--text-2);
+  border-radius: var(--r);
+  background: var(--bg-sunk);
+  overflow: hidden;
 }
 
-.pf-tokens-empty {
+.pf-seg-btn {
+  padding: var(--s2) var(--s3);
+  border: 0;
+  background: transparent;
+  color: var(--muted);
   font-size: var(--fs-xs);
-  color: var(--faint);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
 }
 
-/* --- save --- */
+.pf-seg-btn + .pf-seg-btn {
+  border-left: 1px solid var(--line);
+}
 
+.pf-seg-btn:hover {
+  color: var(--text);
+}
+
+.pf-seg-btn.is-on {
+  background: var(--panel-2);
+  color: var(--accent);
+}
+
+/* Save Actions Block */
 .pf-commit {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s4);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line-soft);
   flex-wrap: wrap;
-  padding-top: var(--s1);
 }
 
 .pf-commit-note {
   font-size: var(--fs-xs);
-  line-height: var(--lh-snug);
-  color: var(--faint);
+  color: var(--muted);
   max-width: 48ch;
 }
 
@@ -268,26 +653,27 @@
 }
 
 .pf-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: var(--fs-xs);
   color: var(--score-hi);
-  animation: u-fade var(--dur-3) var(--ease) both;
+  font-weight: 600;
 }
 
 .pf-btn {
   appearance: none;
   border: 1px solid var(--line);
-  background: var(--panel);
+  background: var(--panel-2);
   color: var(--text-2);
   border-radius: var(--r-sm);
-  padding: 0.42rem 0.85rem;
+  padding: 0.45rem 0.95rem;
   font-size: var(--fs-sm);
   font-weight: 500;
   line-height: 1.4;
   white-space: nowrap;
-  transition:
-    background var(--dur-1) var(--ease),
-    border-color var(--dur-1) var(--ease),
-    color var(--dur-1) var(--ease);
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .pf-btn:hover:not(:disabled) {
@@ -311,7 +697,6 @@
 .pf-btn-go:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
-  color: var(--on-accent);
 }
 
 .pf-btn-red {
@@ -339,278 +724,72 @@
   color: #2a0d0d;
 }
 
-.pf-btn-unset {
-  color: var(--muted);
-}
-
-.pf-link {
-  color: var(--accent);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.pf-link:hover {
-  text-decoration: underline;
-}
-
-/* -----------------------------------------------------------------------------
-   Scoring key
-   -------------------------------------------------------------------------- */
-
-.pf-keypanel {
+/* Skeleton Loading */
+.pf-skel-wrap {
   display: flex;
   flex-direction: column;
-  gap: var(--s3);
-  padding: var(--s4);
-  border-radius: var(--r-lg);
-  background: var(--panel);
-  border: 1px solid var(--line);
+  gap: var(--s4);
 }
 
-.pf-kp-head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.pf-kp-headkey {
-  font-size: var(--fs-xs);
-  color: var(--faint);
-  margin-right: var(--s1);
-}
-
-.pf-st-on {
-  --st: var(--score-hi);
-  --st-bg: rgba(78, 201, 142, 0.13);
-  --st-fg: #93dcb8;
-  text-transform: capitalize;
-}
-
-.pf-st-off {
-  --st: var(--st-outreach);
-  --st-bg: rgba(216, 167, 95, 0.13);
-  --st-fg: #e0c294;
-}
-
-.pf-mask {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  padding: 0.18rem 0.45rem;
+.pf-skel-h {
+  width: 16rem;
+  height: 28px;
   border-radius: var(--r-sm);
-  background: var(--bg-sunk);
-  border: 1px solid var(--line);
-  color: var(--text-2);
 }
 
-.pf-providers {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: var(--fs-xs);
-  color: var(--muted);
-}
-
-.pf-prov-lead {
-  color: var(--faint);
-}
-
-.pf-prov {
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-}
-
-/* A three-column ledger: term, then what it actually means. Used by both the
-   key panel and the delete-account panel — the two places in the app where a
-   promise has to be legible. */
-.pf-led {
-  display: grid;
-  grid-template-columns: 9.5rem minmax(0, 1fr);
-  gap: var(--s3);
-  align-items: baseline;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-snug);
-  color: var(--muted);
-}
-
-.pf-led-term {
-  font-weight: 600;
-  color: var(--text-2);
-}
-
-.pf-led-keep .pf-led-term {
-  color: var(--muted);
-}
-
-.pf-kp-note {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-snug);
-  color: var(--muted);
-  padding-top: var(--s2);
-  border-top: 1px solid var(--line-soft);
-}
-
-.pf-keyform {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--s2);
-}
-
-.pf-keylabel {
-  margin-bottom: 0;
-  font-size: var(--fs-sm);
-  white-space: nowrap;
-}
-
-.pf-keyinput {
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
-}
-
-.pf-foot {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-snug);
-  color: var(--faint);
-}
-
-/* -----------------------------------------------------------------------------
-   Delete account
-   -------------------------------------------------------------------------- */
-
-.pf-sec-danger .sec-title {
-  color: #e9b0af;
-}
-
-.pf-danger {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  padding: var(--s4);
-  border-radius: var(--r-lg);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  transition:
-    border-color var(--dur-2) var(--ease),
-    background var(--dur-2) var(--ease);
-}
-
-/* Armed is a real state change and should look like one. */
-.pf-danger-armed {
-  border-color: rgba(211, 112, 110, 0.42);
-  background: rgba(211, 112, 110, 0.06);
-}
-
-.pf-danger-act {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  flex-wrap: wrap;
-  padding-top: var(--s3);
-  border-top: 1px solid var(--line-soft);
-}
-
-.pf-danger-arm {
+.pf-skel-box {
   width: 100%;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-snug);
-  color: #e9b0af;
+  height: 220px;
+  border-radius: var(--r-lg);
 }
 
-/* -----------------------------------------------------------------------------
-   Narrow
-   -------------------------------------------------------------------------- */
-
-@media (max-width: 760px) {
+/* --- Mobile Responsiveness --- */
+@media (max-width: 768px) {
   .pf-row {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--s2);
+    padding: var(--s2) 0;
   }
 
-  .pf-note {
-    max-width: none;
+  .pf-drop {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
   }
 
-  .pf-led {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
+  .pf-drop-info {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .pf-keyform {
-    grid-template-columns: minmax(0, 1fr);
+  .pf-drop-btn {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .pf-keylabel {
-    margin-bottom: 0;
+  .pf-floating-bar {
+    width: calc(100% - var(--s4));
+    bottom: var(--s3);
   }
-}
 
-/* Résumé upload. Given real presence above the textarea, because a file is what
-   the user already has and pasting is the fallback, not the other way round. */
-.pf-drop {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  flex-wrap: wrap;
-  padding: var(--s4);
-  margin-bottom: var(--s3);
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--r-lg);
-  background: var(--panel);
-  transition: border-color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
-}
+  .pf-commit {
+    flex-direction: column;
+    align-items: stretch;
+  }
 
-/* Only while a file is genuinely over the zone. The accent means "this is the
-   thing to act on", which for one drag-length is exactly true. */
-.pf-drop.is-over {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-}
+  .pf-commit-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 
-.pf-drop-input { display: none; }
-
-.pf-drop-btn {
-  flex: none;
-  padding: var(--s2) var(--s4);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r);
-  background: var(--panel-2);
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
-}
-
-.pf-drop-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--panel-3);
-}
-
-.pf-drop-btn:focus-visible {
-  outline: 2px solid var(--accent-ring);
-  outline-offset: 2px;
-}
-
-.pf-drop-btn:disabled { opacity: 0.6; cursor: default; }
-
-.pf-drop-hint {
-  margin: 0;
-  font-size: var(--fs-sm);
-  color: var(--muted);
-}
-
-.pf-drop-err {
-  margin: 0 0 var(--s3);
-  font-size: var(--fs-sm);
-  color: var(--red);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pf-drop, .pf-drop-btn { transition: none; }
+  .pf-btn-go {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }

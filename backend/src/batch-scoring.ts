@@ -1,4 +1,4 @@
-import { Job, Profile } from './types';
+import { Job, Profile, formatSalaryFloor } from './types';
 import { config as defaultConfig, Config } from './config';
 import {
   llmComplete,
@@ -400,7 +400,7 @@ Roles wanted: ${profile.roles.join(', ') || 'n/a'}
 Max years of experience: ${profile.maxYoE ?? 3}
 Preferred locations: ${profile.locations.join(', ') || 'n/a'}
 Must-haves: ${profile.mustHaves.join(', ') || 'n/a'}
-Minimum salary (LPA): ${profile.salaryFloorLPA ?? 'n/a'}
+Minimum salary: ${formatSalaryFloor(profile.salaryFloor)}
 CV variants available: ${variants.join(', ')}
 Resume:
 ${profile.resumeText.slice(0, 6000)}

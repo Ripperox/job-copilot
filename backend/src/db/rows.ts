@@ -28,6 +28,7 @@ export interface ProfileRow {
   resume_text: string; roles: string[]; locations: string[];
   salary_floor_lpa: number | null; max_yoe: number | null;
   must_haves: string[]; cv_variants: string[];
+  salary_floor_amount: number | null; salary_currency: string; salary_period: string;
 }
 
 export function toProfile(r: ProfileRow): Profile {
@@ -35,7 +36,14 @@ export function toProfile(r: ProfileRow): Profile {
     resumeText: r.resume_text,
     roles: r.roles,
     locations: r.locations,
-    salaryFloorLPA: r.salary_floor_lpa,
+    salaryFloor: {
+      // Prefer the currency-aware amount; fall back to the legacy LPA value for
+      // profiles saved before the migration. Currency defaults to INR, so that
+      // fallback still reads as the lakhs the column really held.
+      amount: r.salary_floor_amount != null ? r.salary_floor_amount : (r.salary_floor_lpa ?? null),
+      currency: r.salary_currency || 'INR',
+      period: (r.salary_period as Profile['salaryFloor']['period']) || 'year',
+    },
     maxYoE: r.max_yoe,
     mustHaves: r.must_haves,
     cvVariants: r.cv_variants,

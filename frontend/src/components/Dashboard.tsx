@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import type { JobStatus, ScoredJob, SourceInfo, RescoreProgress } from '../api'
+import type { JobStatus, ScoredJob, SourceInfo, RescoreProgress, RunPhase } from '../api'
 import { JOB_STATUSES, UnauthorizedError, fetchJobs, getJobs, getProfile, getRescoreStatus, getSources, startRescore } from '../api'
 import JobCard from './JobCard'
 import DashError, { describeError } from './DashError'
 import type { DashErrorInfo } from './DashError'
 import DashRunPanel, { formatElapsed } from './DashRunPanel'
-import type { RunPhase } from './DashRunPanel'
 import DashSkeleton from './DashSkeleton'
 import '../styles/dashboard.css'
 
@@ -23,6 +22,14 @@ import '../styles/dashboard.css'
 // to take a third of the career dashboard is a footnote you can open.
 
 const SCORE_OPTIONS = [0, 50, 60, 70, 80]
+
+const SCORE_LEGEND = {
+  0: 'Show every role, scored or not.',
+  50: '50+ = partial match: right level but different primary stack (.NET, PHP, Vue-only, etc.) or weaker overlap.',
+  60: '60+ = stronger partial: related stack, good experience overlap.',
+  70: '70+ = very close: same stack family, right level, minor gaps.',
+  80: '80+ = APPLY: backend OR full-stack at your level with a related stack.',
+}
 
 const STATUS_LABELS: Record<JobStatus, string> = {
   new: 'New',
@@ -54,15 +61,61 @@ function hostOf(url: string): string | null {
   }
 }
 
+// Locations arrive as free text ("Bengaluru, India", "Remote", "Amsterdam",
+// "NL", "Netherlands"). A filter must be forgiving: "NL" must match "Netherlands"
+// and "Amsterdam, NL", and exact spelling should never matter. We alias the
+// common forms so one chip ("Netherlands") catches every spelling of it.
+const ALIASES: Record<string, string> = {
+  netherlands: 'nl',
+  holland: 'nl',
+  nl: 'nl',
+  'the netherlands': 'nl',
+  'united states': 'us',
+  usa: 'us',
+  'u.s.': 'us',
+  'united kingdom': 'uk',
+  england: 'uk',
+  'u.k.': 'uk',
+  germany: 'de',
+  france: 'fr',
+  india: 'in',
+  bengaluru: 'bengaluru',
+  bangalore: 'bengaluru',
+  remote: 'remote',
+}
+
+// Does a job's location match the active filter? Empty filter matches everything.
+// Every term in the query must appear (after aliasing), so "Netherlands" and
+// "Amsterdam" both match "Amsterdam, Netherlands" but a bare "a" still matches
+// nothing, avoiding the classic substring-prefix misfire.
+function matchesLocation(location: string, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const hay = (location || '').toLowerCase()
+  const norm = (t: string): string[] => {
+    const aliased = ALIASES[t] ?? t
+    return [t, aliased].filter(Boolean)
+  }
+  return q.split(/\s+/).every((term) => {
+    const forms = norm(term)
+    return forms.some((f) => hay.includes(f))
+  })
+}
+
 export default function Dashboard({
   view,
   onUnauthorized,
   onSwitchView,
+  globalPhase,
+  setGlobalPhase,
 }: {
   view: 'career-pages' | 'job-boards'
   onUnauthorized?: () => void
   /** Jump to the other dashboard — used by the empty state's cross-reference. */
   onSwitchView?: (view: 'career-pages' | 'job-boards' | 'profile') => void
+  /** Global phase from App — persists across tab switches. */
+  globalPhase: RunPhase
+  setGlobalPhase: (phase: RunPhase) => void
 }) {
   const career = view === 'career-pages'
   const uid = useId()
@@ -71,13 +124,13 @@ export default function Dashboard({
   const [minScore, setMinScore] = useState(50)
   const [jobs, setJobs] = useState<ScoredJob[]>([])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [locationFilter, setLocationFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<DashErrorInfo | null>(null)
   const [actionError, setActionError] = useState<{
     info: DashErrorInfo
     retry: () => void
   } | null>(null)
-  const [phase, setPhase] = useState<RunPhase>('idle')
   const [note, setNote] = useState<Note | null>(null)
   // Live progress of a background rescore. Null when none is running.
   const [rescore, setRescore] = useState<RescoreProgress | null>(null)
@@ -89,6 +142,10 @@ export default function Dashboard({
   // Rows matching the filter on the server, which can exceed those returned.
   const [matchTotal, setMatchTotal] = useState(0)
   const [hasResume, setHasResume] = useState<boolean | null>(null)
+
+  // Use global phase — no local phase state needed
+  const phase = globalPhase
+  const setPhase = setGlobalPhase
 
   // Guards against a slow response from the view you just left overwriting the
   // list of the view you are now looking at.
@@ -141,6 +198,7 @@ export default function Dashboard({
   // one — start it clean. Declared before the loader so it wins the render.
   useEffect(() => {
     setStatusFilter('all')
+    setLocationFilter('')
     setJobs([])
     setNote(null)
     setActionError(null)
@@ -301,9 +359,21 @@ export default function Dashboard({
   }, [jobs])
 
   const visibleJobs = useMemo(
-    () => (statusFilter === 'all' ? jobs : jobs.filter((j) => j.status === statusFilter)),
-    [jobs, statusFilter],
+    () =>
+      jobs.filter(
+        (j) =>
+          (statusFilter === 'all' || j.status === statusFilter) &&
+          matchesLocation(j.location, locationFilter),
+      ),
+    [jobs, statusFilter, locationFilter],
   )
+
+  // Quick location chips derived from what is actually on this dashboard, so a
+  // user can filter to "Remote" or wherever without spelunking the queue.
+  const locationChips = useMemo(() => {
+    const want = ['Remote', 'Netherlands', 'Bengaluru', 'India', 'Mumbai', 'Hyderabad', 'Delhi', 'New York', 'London', 'Berlin', 'Singapore', 'Dubai']
+    return want.filter((w) => jobs.some((j) => matchesLocation(j.location, w)))
+  }, [jobs])
 
   const freshCount = useMemo(
     () =>
@@ -351,6 +421,7 @@ export default function Dashboard({
               type="button"
               className={`dsh-score${s === minScore ? ' is-on' : ''}`}
               aria-pressed={s === minScore}
+              title={SCORE_LEGEND[s as keyof typeof SCORE_LEGEND] ?? `Show roles scoring ${s} or higher.`}
               onClick={() => setMinScore(s)}
             >
               {s === 0 ? 'Any' : <span className="dsh-num">{s}+</span>}
@@ -391,6 +462,51 @@ export default function Dashboard({
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="dsh-ctl dsh-ctl-loc">
+        <label className="dsh-ctl-k" htmlFor={`${uid}-loc`}>
+          Location
+        </label>
+        <div className="dsh-loc">
+          <span className="dsh-loc-pin" aria-hidden="true">
+            ⌖
+          </span>
+          <input
+            id={`${uid}-loc`}
+            className="dsh-loc-input"
+            type="text"
+            placeholder="City, country, or NL"
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value)}
+            spellCheck={false}
+          />
+          {locationFilter && (
+            <button
+              type="button"
+              className="dsh-loc-clear"
+              aria-label="Clear location filter"
+              onClick={() => setLocationFilter('')}
+            >
+              ×
+            </button>
+          )}
+        </div>
+        {locationChips.length > 0 && (
+          <div className="dsh-loc-chips" role="group" aria-label="Quick locations">
+            {locationChips.map((w) => (
+              <button
+                key={w}
+                type="button"
+                className={`dsh-loc-chip${locationFilter.trim() === w ? ' is-on' : ''}`}
+                aria-pressed={locationFilter.trim() === w}
+                onClick={() => setLocationFilter(locationFilter.trim() === w ? '' : w)}
+              >
+                {w}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </>
   )
@@ -433,11 +549,11 @@ export default function Dashboard({
                 <polyline points="10 9 9 9 8 9" />
               </svg>
             </div>
-            <h3 className="dsh-empty-t">Upload your résumé to see match scores</h3>
+            <h3 className="dsh-empty-t">Add your résumé to see match scores</h3>
             <p className="dsh-empty-b">
-              There {poolForView === 1 ? 'is' : 'are'}{' '}
-              <span className="dsh-num">{poolForView.toLocaleString()}</span> {career ? 'career-page' : 'API'}{' '}
-              {poolForView === 1 ? 'role' : 'roles'} waiting in your pipeline. Once you add your résumé in Profile, we will score every job against your exact stack and experience.
+              <span className="dsh-num">{poolForView.toLocaleString()}</span>{' '}
+              {career ? 'career-page' : 'API'} {poolForView === 1 ? 'role' : 'roles'} are waiting.
+              Add your résumé and they get scored against your stack.
             </p>
             <div className="dsh-empty-acts">
               {onSwitchView && (
@@ -468,31 +584,14 @@ export default function Dashboard({
             Nothing scores <span className="dsh-num">{minScore}</span> or higher
           </h3>
           <p className="dsh-empty-b">
-            {career ? (
-              <>
-                There {poolForView === 1 ? 'is' : 'are'}{' '}
-                <span className="dsh-num">{poolForView}</span> career-page{' '}
-                {poolForView === 1 ? 'role' : 'roles'} in the pool and none of them
-                clear <span className="dsh-num">{minScore}</span>. Career pages are a
-                slow trickle by design, so a thin patch is normal — the ones that
-                scored lower are still worth a look.
-              </>
-            ) : (
-              <>
-                There {poolForView === 1 ? 'is' : 'are'}{' '}
-                <span className="dsh-num">{poolForView}</span>{' '}
-                {poolForView === 1 ? 'listing' : 'listings'} in the pool and none clear{' '}
-                <span className="dsh-num">{minScore}</span>. Drop the bar to see what is
-                underneath, or fetch for something newer.
-              </>
-            )}
+            {poolForView === 1 ? 'One role' : `${poolForView} roles`} scored below{' '}
+            <span className="dsh-num">{minScore}</span>. Lower the bar to see them.
           </p>
           <p className="dsh-empty-b">
             {otherCount > 0 ? (
               <>
                 <span className="dsh-num">{otherCount}</span>{' '}
-                {otherCount === 1 ? 'role' : 'roles'} on <strong>{other}</strong> clear{' '}
-                <span className="dsh-num">{minScore}</span> right now.
+                {otherCount === 1 ? 'role' : 'roles'} on <strong>{other}</strong> clear it.
               </>
             ) : (
               <>Nothing on <strong>{other}</strong> clears it either.</>
@@ -525,13 +624,8 @@ export default function Dashboard({
         <div className="dsh-empty">
           <h3 className="dsh-empty-t">No career-page roles yet</h3>
           <p className="dsh-empty-b">
-            Company career pages are re-read every few hours rather than on every
-            fetch, so this list fills slowly and stays short on purpose — that is
-            the point of it.
-          </p>
-          <p className="dsh-empty-b">
-            Run a fetch to check now. If your profile is still empty, set that
-            first: nothing can be scored without it.
+            Career pages are re-read every few hours, so this list fills slowly on purpose. Run
+            a fetch to check now.
           </p>
         </div>
       )
@@ -541,14 +635,13 @@ export default function Dashboard({
       <div className="dsh-empty">
         <h3 className="dsh-empty-t">No board listings yet</h3>
         <p className="dsh-empty-b">
-          These come from company ATS boards (Greenhouse, Lever, Ashby) and
-          aggregators (Adzuna, Jooble). A fetch fills this up in about a minute,
-          as long as your profile is set so there is something to score against.
+          These come from company ATS boards and aggregators. A fetch fills this up in about a
+          minute.
         </p>
         {minScore > 0 && (
           <p className="dsh-empty-b">
-            You are also filtering to <span className="dsh-num">{minScore}</span>+
-            — lowering that will show more.
+            You are also filtering to <span className="dsh-num">{minScore}</span>+ — lowering
+            that shows more.
           </p>
         )}
         {minScore > 0 && (
@@ -604,6 +697,27 @@ export default function Dashboard({
     )
   } else if (jobs.length === 0) {
     listRegion = emptyPool()
+  } else if (visibleJobs.length === 0 && locationFilter) {
+    listRegion = (
+      <div className="dsh-empty">
+        <h3 className="dsh-empty-t">No matches in “{locationFilter}”</h3>
+        <p className="dsh-empty-b">
+          {jobs.length === 1
+            ? 'Your one match isn’t in that location.'
+            : `None of your ${jobs.length} matches have that location.`}{' '}
+          Try “NL”, “Netherlands”, a city, or clear the filter.
+        </p>
+        <div className="dsh-empty-acts">
+          <button
+            type="button"
+            className="dsh-btn dsh-btn-go"
+            onClick={() => setLocationFilter('')}
+          >
+            Clear location filter
+          </button>
+        </div>
+      </div>
+    )
   } else if (visibleJobs.length === 0) {
     listRegion = emptyStatus()
   } else {
@@ -723,6 +837,13 @@ export default function Dashboard({
             {STATUS_LABELS[statusFilter].toLowerCase()}
           </>
         )}
+        {locationFilter && (
+          <>
+            {' · '}
+            <span className="dsh-num">{visibleJobs.length}</span> in{' '}
+            <span className="dsh-num">{locationFilter}</span>
+          </>
+        )}
         {freshCount > 0 && statusFilter === 'all' && (
           <>
             {' · '}
@@ -760,9 +881,7 @@ export default function Dashboard({
             </p>
             <h2 className="dsh-h1">Scraped off company career pages</h2>
             <p className="dsh-lede">
-              Read straight off company career sites that publish no API, so
-              they exist nowhere else we can reach. A handful every few hours,
-              not hundreds — worth reading properly.
+              Few, fresh, barely contested. Read each one properly.
             </p>
           </div>
           <div className="dsh-head-run">
@@ -823,9 +942,7 @@ export default function Dashboard({
           <p className="dsh-eyebrow">API sources</p>
           <h2 className="dsh-h1">Everything pulled through an API</h2>
           <p className="dsh-lede">
-            Company ATS boards — Greenhouse, Lever, Ashby — plus aggregators
-            everyone else is reading too. Volume is the point: set a floor, work
-            down from the top, move quickly.
+            ATS boards and aggregators, all scored. Set a floor and work down.
           </p>
         </div>
 

@@ -12,7 +12,7 @@ const profile = (over: Partial<Profile> = {}): Profile => ({
   resumeText: 'Backend engineer. Node, Postgres, TypeScript.',
   roles: ['backend engineer', 'full stack'],
   locations: ['mumbai', 'remote'],
-  salaryFloorLPA: null, maxYoE: 3,
+  salaryFloor: { amount: null, currency: 'INR', period: 'year' }, maxYoE: 3,
   mustHaves: ['node', 'postgres'],
   cvVariants: ['Backend', 'AI', 'Blockchain'], ...over,
 });

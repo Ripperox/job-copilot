@@ -1,5 +1,5 @@
 import { query, pool } from './pool';
-import { Job, Profile, Score, JobMeta, Outreach, ScoredJob } from '../types';
+import { Job, Profile, Score, JobMeta, Outreach, ScoredJob, salaryFloorToLPA } from '../types';
 import {
   JobRow, toJob,
   ProfileRow, toProfile,
@@ -223,7 +223,9 @@ export const db = {
 
   async getProfile(userId: string): Promise<Profile | null> {
     const { rows } = await query<ProfileRow>(
-      `SELECT resume_text, roles, locations, salary_floor_lpa, max_yoe, must_haves, cv_variants
+      `SELECT resume_text, roles, locations,
+              salary_floor_lpa, salary_floor_amount, salary_currency, salary_period,
+              max_yoe, must_haves, cv_variants
        FROM profiles WHERE user_id = $1`,
       [userId],
     );
@@ -231,15 +233,26 @@ export const db = {
   },
 
   async setProfile(userId: string, p: Profile): Promise<Profile> {
+    // The legacy LPA column is kept in sync (as lakhs) so old code and reports
+    // that still read it stay correct, but the structured fields are now the
+    // source of truth.
+    const lpa = salaryFloorToLPA(p.salaryFloor);
     await query(
-      `INSERT INTO profiles (user_id, resume_text, roles, locations, salary_floor_lpa, max_yoe, must_haves, cv_variants)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `INSERT INTO profiles (user_id, resume_text, roles, locations, salary_floor_lpa,
+                             salary_floor_amount, salary_currency, salary_period,
+                             max_yoe, must_haves, cv_variants)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (user_id) DO UPDATE SET
          resume_text = EXCLUDED.resume_text, roles = EXCLUDED.roles,
          locations = EXCLUDED.locations, salary_floor_lpa = EXCLUDED.salary_floor_lpa,
+         salary_floor_amount = EXCLUDED.salary_floor_amount,
+         salary_currency = EXCLUDED.salary_currency,
+         salary_period = EXCLUDED.salary_period,
          max_yoe = EXCLUDED.max_yoe, must_haves = EXCLUDED.must_haves,
          cv_variants = EXCLUDED.cv_variants`,
-      [userId, p.resumeText, p.roles, p.locations, p.salaryFloorLPA, p.maxYoE, p.mustHaves, p.cvVariants],
+      [userId, p.resumeText, p.roles, p.locations, lpa,
+       p.salaryFloor.amount, p.salaryFloor.currency, p.salaryFloor.period,
+       p.maxYoE, p.mustHaves, p.cvVariants],
     );
     return p;
   },

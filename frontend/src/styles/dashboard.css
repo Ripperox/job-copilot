@@ -531,6 +531,99 @@
   color: var(--text-2);
 }
 
+/* --- location filter --- */
+
+.dsh-ctl-loc {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+  max-width: 18rem;
+}
+
+.dsh-loc {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  width: 100%;
+  padding: 0 var(--s2);
+  border-radius: var(--r-sm);
+  background: var(--bg-sunk);
+  border: 1px solid var(--line);
+  transition: border-color var(--dur-1) var(--ease);
+}
+
+.dsh-loc:focus-within {
+  border-color: var(--accent);
+}
+
+.dsh-loc-pin {
+  color: var(--faint);
+  font-size: var(--fs-sm);
+  line-height: 1;
+}
+
+.dsh-loc-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--s2) 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  outline: none;
+}
+
+.dsh-loc-input::placeholder {
+  color: var(--faint);
+}
+
+.dsh-loc-clear {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1;
+  cursor: pointer;
+  padding: var(--s1);
+}
+
+.dsh-loc-clear:hover {
+  color: var(--text);
+}
+
+.dsh-loc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+}
+
+.dsh-loc-chip {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  padding: var(--s1) var(--s2);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+
+.dsh-loc-chip:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.dsh-loc-chip.is-on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
 /* --- count --- */
 
 .dsh-count {

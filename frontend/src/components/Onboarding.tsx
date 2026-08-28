@@ -151,12 +151,11 @@ export default function Onboarding({
       <header className="ob-head">
         <div className="ob-head-text">
           <h2 className="ob-title" id="ob-title">
-            Three things and you are running
+            Set up in 3 steps
           </h2>
           <p className="ob-sub">
-            Shortlist scores every posting it finds against your résumé and drafts the
-            outreach for the ones worth your time. This is the setup that makes that work — any
-            order, and you can come back later.
+            Add your résumé, pick a scoring key, then see your matches. Any order — you can
+            come back later from the top bar.
           </p>
         </div>
         <div className="ob-meta">
@@ -175,7 +174,7 @@ export default function Onboarding({
           state={resumeDone ? 'done' : 'todo'}
           emphasis={next === 1}
           title="Add your résumé"
-          why="Drop in the PDF you already have. Every score is a comparison against this text, so without it there is nothing to match a job to."
+          why="Every score compares a job against this. Without it there's nothing to match against."
           done={
             resumeDone ? (
               <>
@@ -194,11 +193,11 @@ export default function Onboarding({
           emphasis={next === 2}
           optional
           title="Add a scoring key"
-          why="A Groq, Gemini or Anthropic key lets a model read each posting properly and say why it scored what it did."
+          why="A Groq, Gemini or Anthropic key lets the model read each posting and explain its score."
           honest={
             keyDone
               ? null
-              : 'Without a key nothing breaks: scoring falls back to keyword matching. It is blunter and it cannot explain itself, but it works.'
+              : 'Skip this and scoring falls back to keyword matching — blunter, and no written reason.'
           }
           done={
             keyDone ? (
@@ -220,7 +219,7 @@ export default function Onboarding({
           state={matchesDone ? 'done' : 'todo'}
           emphasis={next === 3}
           title="See your matches"
-          why="Postings are already collected from company career pages and the job boards. Saving your résumé starts scoring them against it."
+          why="Jobs are already collected. Save your résumé and they start getting scored."
           done={
             matchesDone ? (
               <>

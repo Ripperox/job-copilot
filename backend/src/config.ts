@@ -33,6 +33,10 @@ export const config = {
   // so batches sent to it are deliberately smaller.
   cerebrasApiKey: process.env.CEREBRAS_API_KEY || '',
   cerebrasModel: process.env.CEREBRAS_MODEL || 'llama-3.3-70b',
+  // NVIDIA Nemotron 3 Ultra — OpenAI-compatible endpoint on integrate.api.nvidia.com.
+  // Supports reasoning (thinking) mode and large context (128k).
+  nemotronApiKey: process.env.NEMOTRON_API_KEY || '',
+  nemotronModel: process.env.NEMOTRON_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b',
   // JSearch via RapidAPI (aggregates Google for Jobs → LinkedIn, Indeed, Glassdoor…)
   jsearchApiKey: process.env.JSEARCH_RAPIDAPI_KEY || '',
   // Pages per role query (10 jobs/page). More = more coverage but more API quota.

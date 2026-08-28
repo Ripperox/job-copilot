@@ -45,7 +45,7 @@ AI/LLM: LLM integration, natural-language-to-SQL, local open-source model deploy
 Blockchain: Substrate, Polkadot, Solidity, Ethereum.`,
   roles: ['Backend Engineer', 'Full Stack Developer', 'AI/LLM Engineer'],
   locations: ['Remote', 'India', 'Mumbai'],
-  salaryFloorLPA: 12,
+  salaryFloor: { amount: 1_200_000, currency: 'INR', period: 'year' },
   maxYoE: 3,
   mustHaves: ['Node.js', 'TypeScript', 'React', 'Python', 'Rust', 'PostgreSQL'],
   cvVariants: ['Backend', 'AI', 'Blockchain'],

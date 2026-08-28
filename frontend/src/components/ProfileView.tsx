@@ -1,8 +1,8 @@
+import { useEffect, useState, useRef, useCallback } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import SystemStatus from './SystemStatus'
 import ApiUsage from './ApiUsage'
-import { useEffect, useState, useRef } from 'react'
 import { ACCEPTED, ResumeFileError, readResumeFile } from '../lib/resume-file'
-import type { ReactNode } from 'react'
 import type { Profile } from '../api'
 import { UnauthorizedError, deleteAccount, getProfile, saveProfile } from '../api'
 import KeySettings from './KeySettings'
@@ -12,61 +12,112 @@ const EMPTY: Profile = {
   resumeText: '',
   roles: [],
   locations: [],
-  salaryFloorLPA: null,
+  salaryFloor: { amount: null, currency: 'INR', period: 'year' },
   maxYoE: 3,
   mustHaves: [],
   cvVariants: [],
 }
 
-function toCsv(arr: string[]): string {
-  return arr.join(', ')
+function TagInput({
+  id,
+  placeholder,
+  tags,
+  onChange,
+}: {
+  id: string
+  placeholder: string
+  tags: string[]
+  onChange: (tags: string[]) => void
+}) {
+  const [input, setInput] = useState('')
+
+  const addTag = (text: string) => {
+    const split = text
+      .split(',')
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0)
+    if (split.length === 0) return
+    const next = Array.from(new Set([...tags, ...split]))
+    onChange(next)
+    setInput('')
+  }
+
+  const removeTag = (idx: number) => {
+    onChange(tags.filter((_, i) => i !== idx))
+  }
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addTag(input)
+    } else if (e.key === 'Backspace' && !input && tags.length > 0) {
+      removeTag(tags.length - 1)
+    }
+  }
+
+  return (
+    <div className="pf-tag-box" onClick={(e) => (e.currentTarget.querySelector('input') as HTMLElement)?.focus()}>
+      <div className="pf-tag-list">
+        {tags.map((tag, i) => (
+          <span key={`${tag}-${i}`} className="pf-tag-chip">
+            <span className="pf-tag-text">{tag}</span>
+            <button
+              type="button"
+              className="pf-tag-del"
+              onClick={(e) => {
+                e.stopPropagation()
+                removeTag(i)
+              }}
+              title={`Remove ${tag}`}
+              aria-label={`Remove ${tag}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          id={id}
+          className="pf-tag-input"
+          value={input}
+          placeholder={tags.length === 0 ? placeholder : 'Add more…'}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => {
+            if (input.trim()) addTag(input)
+          }}
+        />
+      </div>
+      <div className="pf-tag-footer">
+        <p className="pf-tag-hint">Press Enter or comma to add</p>
+        <span className="pf-tag-count u-num">{tags.length}</span>
+      </div>
+    </div>
+  )
 }
 
-function fromCsv(value: string): string[] {
-  return value
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-}
-
-// One setting: name and explanation on the left, the control on the right.
-// The ordinary shape of settings in a well-made product.
 function Setting({
   id,
   label,
   note,
   children,
+  required,
 }: {
   id: string
   label: string
   note: ReactNode
   children: ReactNode
+  required?: boolean
 }) {
   return (
     <div className="pf-row">
       <div className="pf-rowkey">
         <label className="pf-key" htmlFor={id}>
           {label}
+          {required && <span className="pf-req" aria-label="Required">*</span>}
         </label>
-        <p className="pf-note">{note}</p>
+        <div className="pf-note">{note}</div>
       </div>
       <div className="pf-rowval">{children}</div>
-    </div>
-  )
-}
-
-// Echo the parsed list back, so the comma syntax has a visible consequence
-// before you hit save. Same parser the save payload uses.
-function Tokens({ value }: { value: string }) {
-  const items = fromCsv(value)
-  if (items.length === 0) return <p className="pf-tokens-empty">Nothing set yet</p>
-  return (
-    <div className="pf-tokens">
-      {items.map((item, i) => (
-        <span className="pf-token" key={`${item}-${i}`}>
-          {item}
-        </span>
-      ))}
     </div>
   )
 }
@@ -86,10 +137,46 @@ export default function ProfileView({
   const [reading, setReading] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
   const [resumeFileName, setResumeFileName] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
-  // Reads a dropped or chosen file into the textarea. The text stays editable
-  // afterwards on purpose — PDF extraction is imperfect, and the user should be
-  // able to fix a mangled line rather than start over.
+  const [roles, setRoles] = useState<string[]>([])
+  const [locations, setLocations] = useState<string[]>([])
+  const [mustHaves, setMustHaves] = useState<string[]>([])
+  const [cvVariants, setCvVariants] = useState<string[]>([])
+  // Salary floor is a structured {amount, currency, period}. The amount is kept
+  // as a string in state so an empty field stays editable ("17.5" typed as
+  // "17." is not yet a number) and is parsed only on save.
+  const [salaryAmount, setSalaryAmount] = useState('')
+  const [salaryCurrency, setSalaryCurrency] = useState('INR')
+  const [salaryPeriod, setSalaryPeriod] = useState<'year' | 'month' | 'hour'>('year')
+  const [maxYoE, setMaxYoE] = useState('3')
+
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
+
+  // Track which required fields are filled for the completion indicator
+  const requiredFilled = useMemo(() => ({
+    resume: resumeText.trim().length > 0,
+    roles: roles.length > 0,
+    locations: locations.length > 0,
+  }), [resumeText, roles, locations])
+
+  const currencySymbol = useMemo(() => {
+    const symbols: Record<string, string> = { INR: '₹', USD: '$', EUR: '€', GBP: '£' }
+    return symbols[salaryCurrency] || salaryCurrency
+  }, [salaryCurrency])
+
+  const requiredCount = useMemo(() => 
+    Object.values(requiredFilled).filter(Boolean).length, [requiredFilled])
+
+  // Format salary amount with commas on blur for readability
+  const formatSalaryAmount = (val: string) => {
+    const num = Number(val.replace(/[, ]/g, ''))
+    return Number.isFinite(num) ? num.toLocaleString() : val
+  }
+
   async function loadResumeFile(file: File) {
     setReading(true)
     setFileError(null)
@@ -97,6 +184,7 @@ export default function ProfileView({
       const text = await readResumeFile(file)
       setResumeText(text)
       setResumeFileName(file.name)
+      setIsDirty(true)
     } catch (err: unknown) {
       setResumeFileName(null)
       setFileError(
@@ -108,36 +196,28 @@ export default function ProfileView({
       setReading(false)
     }
   }
-  const [roles, setRoles] = useState('')
-  const [locations, setLocations] = useState('')
-  const [mustHaves, setMustHaves] = useState('')
-  const [cvVariants, setCvVariants] = useState('')
-  const [salaryFloor, setSalaryFloor] = useState('')
-  const [maxYoE, setMaxYoE] = useState('3')
-
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
     getProfile()
-      .then((profile) => {
+      .then((p) => {
         if (!active) return
-        const p = profile ?? EMPTY
-        setResumeText(p.resumeText ?? '')
-        setRoles(toCsv(p.roles ?? []))
-        setLocations(toCsv(p.locations ?? []))
-        setMustHaves(toCsv(p.mustHaves ?? []))
-        setCvVariants(toCsv(p.cvVariants ?? []))
-        setSalaryFloor(p.salaryFloorLPA == null ? '' : String(p.salaryFloorLPA))
-        setMaxYoE(p.maxYoE == null ? '3' : String(p.maxYoE))
+        const prof = p ?? EMPTY
+        setResumeText(prof.resumeText ?? '')
+        setRoles(prof.roles ?? [])
+        setLocations(prof.locations ?? [])
+        setMustHaves(prof.mustHaves ?? [])
+        setCvVariants(prof.cvVariants ?? [])
+        const sf = prof.salaryFloor ?? { amount: null, currency: 'INR', period: 'year' }
+        setSalaryAmount(sf.amount != null ? String(sf.amount) : '')
+        setSalaryCurrency(sf.currency || 'INR')
+        setSalaryPeriod(sf.period === 'month' || sf.period === 'hour' ? sf.period : 'year')
+        setMaxYoE(
+          prof.maxYoE !== null && prof.maxYoE !== undefined ? String(prof.maxYoE) : '3',
+        )
       })
       .catch((err: unknown) => {
-        if (!active) return
-        if (err instanceof UnauthorizedError) return onUnauthorized?.()
-        setError(err instanceof Error ? err.message : 'Failed to load profile')
+        if (err instanceof UnauthorizedError) onUnauthorized?.()
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -145,100 +225,194 @@ export default function ProfileView({
     return () => {
       active = false
     }
-  }, [])
+  }, [onUnauthorized])
 
-  async function handleSave() {
+  const handleSave = useCallback(async () => {
     setSaving(true)
     setSaved(false)
-    setError(null)
-    const trimmedSalary = salaryFloor.trim()
-    const payload: Profile = {
+    const yoe = parseInt(maxYoE, 10)
+    const parsed = Number(salaryAmount.replace(/[, ]/g, ''))
+    const profile: Profile = {
       resumeText,
-      roles: fromCsv(roles),
-      locations: fromCsv(locations),
-      mustHaves: fromCsv(mustHaves),
-      cvVariants: fromCsv(cvVariants),
-      salaryFloorLPA: trimmedSalary === '' ? null : Number(trimmedSalary),
-      maxYoE: maxYoE.trim() === '' ? null : Number(maxYoE),
+      roles,
+      locations,
+      mustHaves,
+      cvVariants,
+      salaryFloor: {
+        amount: salaryAmount.trim() !== '' && Number.isFinite(parsed) ? parsed : null,
+        currency: salaryCurrency,
+        period: salaryPeriod,
+      },
+      maxYoE: Number.isFinite(yoe) && yoe >= 0 ? yoe : null,
     }
     try {
-      const updated = await saveProfile(payload)
-      // Reflect any normalization the server did.
-      setResumeText(updated.resumeText ?? '')
-      setRoles(toCsv(updated.roles ?? []))
-      setLocations(toCsv(updated.locations ?? []))
-      setMustHaves(toCsv(updated.mustHaves ?? []))
-      setCvVariants(toCsv(updated.cvVariants ?? []))
-      setSalaryFloor(
-        updated.salaryFloorLPA == null ? '' : String(updated.salaryFloorLPA),
-      )
-      setMaxYoE(updated.maxYoE == null ? '3' : String(updated.maxYoE))
+      await saveProfile(profile)
       setSaved(true)
-      window.setTimeout(() => setSaved(false), 2500)
+      setIsDirty(false)
+      setTimeout(() => setSaved(false), 3500)
     } catch (err: unknown) {
-      if (err instanceof UnauthorizedError) return onUnauthorized?.()
-      setError(err instanceof Error ? err.message : 'Failed to save profile')
+      if (err instanceof UnauthorizedError) onUnauthorized?.()
     } finally {
       setSaving(false)
     }
-  }
+  }, [resumeText, roles, locations, mustHaves, cvVariants, salaryAmount, salaryCurrency, salaryPeriod, maxYoE, onUnauthorized])
+
+  // Keyboard shortcut Cmd+S / Ctrl+S to save
+  useEffect(() => {
+    const onKey = (e: window.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        void handleSave()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleSave])
 
   async function handleDeleteAccount() {
     setDeleting(true)
-    setError(null)
     try {
       await deleteAccount()
       onAccountDeleted?.()
     } catch (err: unknown) {
-      if (err instanceof UnauthorizedError) return onUnauthorized?.()
-      setError(err instanceof Error ? err.message : 'Failed to delete account')
-    } finally {
+      if (err instanceof UnauthorizedError) onUnauthorized?.()
       setDeleting(false)
     }
   }
 
+  const copyResume = () => {
+    if (!resumeText) return
+    navigator.clipboard.writeText(resumeText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   if (loading) {
     return (
-      <div className="pf-loading" role="status">
-        <span className="live-dot" aria-hidden="true" />
-        Loading your profile…
+      <div className="pf-app">
+        <div className="pf-skel-wrap">
+          <div className="u-skeleton pf-skel pf-skel-h" />
+          <div className="u-skeleton pf-skel pf-skel-box" />
+          <div className="u-skeleton pf-skel pf-skel-box" />
+        </div>
       </div>
     )
   }
 
-  // Counts, derived from what is on screen — nothing fetched.
-  const chars = resumeText.length
-  const lines = resumeText.length === 0 ? 0 : resumeText.split('\n').length
+  const chars = resumeText.trim().length
+  const lines = resumeText ? resumeText.split('\n').length : 0
 
   return (
-    <div className="pf">
-      <header className="pf-head">
-        <h1 className="pf-h1">Profile</h1>
-        <p className="pf-lede">
-          This is what Shortlist uses to score and match jobs for you. Your résumé
-          is what every role gets compared against; everything else narrows the
-          search.
-        </p>
-      </header>
-
-      {error && (
-        <div className="pf-alert" role="alert">
-          {error}
+    <div className="pf-app">
+      {/* Sticky Save Bar */}
+      <div className={`pf-floating-bar${isDirty || saved || requiredCount < 3 ? ' is-visible' : ''}`}>
+        <div className="pf-floating-inner">
+          <span className="pf-floating-text">
+            {saved ? (
+              <span className="pf-saved-badge">
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M3 8.5l3.5 3.5L13 4" />
+                </svg>
+                Changes saved
+              </span>
+            ) : isDirty ? (
+              'Unsaved profile changes'
+            ) : (
+              <>
+                <span className="pf-completion">
+                  <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="M3 8.5l3.5 3.5L13 4" />
+                  </svg>
+                  Profile {requiredCount}/3 required — {requiredCount === 3 ? 'Ready to match' : 'Incomplete'}
+                </span>
+              </>
+            )}
+          </span>
+          <div className="pf-floating-acts">
+            <span className="pf-kbd-hint">⌘S to save</span>
+            <button
+              type="button"
+              className="pf-btn pf-btn-go pf-btn-save-sm"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? 'Saving…' : 'Save profile'}
+            </button>
+          </div>
         </div>
-      )}
+      </div>
 
-      <section className="pf-sec">
-        <h2 className="sec-title">Your résumé</h2>
-        <p className="sec-sub">
-          The one document the scorer actually reads. Give it the whole thing rather
-          than a summary — bullets, stack, dates, numbers. Formatting is ignored.
+      {/* Profile Summary — what drives matching */}
+      <section className="pf-sec pf-summary" aria-label="What drives your matches">
+        <div className="pf-summary-grid">
+          <div className="pf-summary-item">
+            <span className="pf-summary-label">Résumé</span>
+            <span className={resumeText.trim() ? 'pf-summary-val pf-summary-ok' : 'pf-summary-val pf-summary-missing'}>
+              {resumeText.trim() ? `${chars.toLocaleString()} chars` : 'Not set'}
+            </span>
+          </div>
+          <div className="pf-summary-item">
+            <span className="pf-summary-label">Target Roles</span>
+            <span className={roles.length ? 'pf-summary-val pf-summary-ok' : 'pf-summary-val pf-summary-missing'}>
+              {roles.length ? roles.join(', ') : 'Not set'}
+            </span>
+          </div>
+          <div className="pf-summary-item">
+            <span className="pf-summary-label">Locations</span>
+            <span className={locations.length ? 'pf-summary-val pf-summary-ok' : 'pf-summary-val pf-summary-missing'}>
+              {locations.length ? locations.join(', ') : 'Not set'}
+            </span>
+          </div>
+          <div className="pf-summary-item">
+            <span className="pf-summary-label">Salary Floor</span>
+            <span className={salaryAmount.trim() ? 'pf-summary-val pf-summary-ok' : 'pf-summary-val pf-summary-missing'}>
+              {salaryAmount.trim() ? `${currencySymbol}${Number(salaryAmount.replace(/[, ]/g, '')).toLocaleString()} per ${salaryPeriod}` : 'Not set'}
+            </span>
+          </div>
+          <div className="pf-summary-item">
+            <span className="pf-summary-label">Experience Ceiling</span>
+            <span className={maxYoE.trim() ? 'pf-summary-val pf-summary-ok' : 'pf-summary-val pf-summary-missing'}>
+              {maxYoE.trim() ? `${maxYoE} years max` : 'Not set'}
+            </span>
+          </div>
+          <div className="pf-summary-item">
+            <span className="pf-summary-label">Must-Haves</span>
+            <span className={mustHaves.length ? 'pf-summary-val pf-summary-ok' : 'pf-summary-val pf-summary-missing'}>
+              {mustHaves.length ? mustHaves.join(', ') : 'Not set'}
+            </span>
+          </div>
+          <div className="pf-summary-item">
+            <span className="pf-summary-label">CV Variants</span>
+            <span className={cvVariants.length ? 'pf-summary-val pf-summary-ok' : 'pf-summary-val pf-summary-missing'}>
+              {cvVariants.length ? cvVariants.join(', ') : 'Using defaults'}
+            </span>
+          </div>
+        </div>
+        <p className="pf-summary-hint">
+          Every job is scored against all of the above. Missing fields are treated as "no
+          preference" — you will see more roles, but less targeted matches.
         </p>
+      </section>
 
-        {/* Upload first, paste second.
-            This was a bare textarea reading "paste your full resume text here",
-            which is the highest-friction moment in the product: a wall of
-            nothing, asking for a chunk of writing the user has to go and find,
-            open, select and copy. The file they already have is a PDF. */}
+      {/* Section 1: Résumé */}
+      <section className="pf-sec">
+        <div className="pf-sec-head">
+          <div>
+            <h2 className="sec-title">Your Résumé</h2>
+            <p className="sec-sub">
+              Upload your PDF or paste your résumé. Every job is scored against this exact text.
+            </p>
+          </div>
+          {chars > 0 && (
+            <span className="pf-badge pf-badge-ok">
+              <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M3 8.5l3.5 3.5L13 4" />
+              </svg>
+              Active ({chars.toLocaleString()} chars)
+            </span>
+          )}
+        </div>
+
         <div
           className={`pf-drop${dragging ? ' is-over' : ''}`}
           onDragOver={(e) => {
@@ -253,172 +427,252 @@ export default function ProfileView({
             if (f) void loadResumeFile(f)
           }}
         >
-          <input
-            ref={fileInput}
-            type="file"
-            accept={ACCEPTED}
-            className="pf-drop-input"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void loadResumeFile(f)
-              // Reset, so choosing the same file twice still fires onChange.
-              e.target.value = ''
-            }}
-          />
-          <button
-            type="button"
-            className="pf-drop-btn"
-            onClick={() => fileInput.current?.click()}
-            disabled={reading}
-          >
-            {reading ? 'Reading…' : 'Choose a file'}
-          </button>
-          <p className="pf-drop-hint">
-            or drop a PDF or text file here
-            {resumeFileName && !reading ? (
-              <>
-                {' · '}
-                <span className="u-mono">{resumeFileName}</span> loaded
-              </>
-            ) : null}
-          </p>
+          <div className="pf-drop-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          </div>
+          <div className="pf-drop-info">
+            <input
+              ref={fileInput}
+              type="file"
+              accept={ACCEPTED}
+              className="pf-drop-input"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) void loadResumeFile(f)
+                e.target.value = ''
+              }}
+            />
+            <button
+              type="button"
+              className="pf-drop-btn"
+              onClick={() => fileInput.current?.click()}
+              disabled={reading}
+            >
+              {reading ? 'Parsing file…' : 'Upload PDF or text'}
+            </button>
+            <p className="pf-drop-hint">
+              Drag and drop your file here · PDF, TXT or Markdown
+              {resumeFileName && !reading && (
+                <span className="pf-file-pill">
+                  <span className="u-mono">{resumeFileName}</span>
+                </span>
+              )}
+            </p>
+          </div>
         </div>
-        {fileError ? (
-          <p className="pf-drop-err" role="alert">
-            {fileError}
-          </p>
-        ) : null}
+
+        {fileError && (
+          <div className="pf-drop-err" role="alert">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+              <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0V5.25A.75.75 0 0 1 8 4.5zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" />
+            </svg>
+            <span>{fileError}</span>
+          </div>
+        )}
 
         <div className="pf-doc">
           <div className="pf-doc-bar">
             <label className="pf-doc-name" htmlFor="pf-resume">
-              Résumé text
+              Parsed text content
             </label>
-            <p className="pf-doc-meta">
-              <span className="u-num">{chars.toLocaleString()}</span> characters
-              {' · '}
-              <span className="u-num">{lines.toLocaleString()}</span> lines
-            </p>
+            <div className="pf-doc-actions">
+              {chars > 0 && (
+                <button type="button" className="pf-btn-ghost-sm" onClick={copyResume}>
+                  {copied ? 'Copied ✓' : 'Copy text'}
+                </button>
+              )}
+              <span className="pf-doc-meta">
+                <span className="u-num">{chars.toLocaleString()}</span> chars ·{' '}
+                <span className="u-num">{lines.toLocaleString()}</span> lines
+              </span>
+            </div>
           </div>
           <textarea
             id="pf-resume"
             className="pf-doc-area"
-            rows={12}
+            rows={10}
             value={resumeText}
-            placeholder="…or paste it here. Uploading fills this in, and you can edit it afterwards."
-            onChange={(e) => setResumeText(e.target.value)}
+            placeholder="Paste your résumé text here or upload above. Edits are saved automatically to your profile."
+            onChange={(e) => {
+              setResumeText(e.target.value)
+              setIsDirty(true)
+            }}
           />
         </div>
       </section>
 
+      {/* Section 2: Matching Preferences */}
       <section className="pf-sec">
-        <h2 className="sec-title">Matching preferences</h2>
-        <p className="sec-sub">
-          Filters applied before scoring. Lists are separated by commas — the chips
-          under each field are exactly what gets stored.
-        </p>
+        <div className="pf-sec-head">
+          <div>
+            <h2 className="sec-title">Matching Preferences</h2>
+            <p className="sec-sub">
+              Target titles, locations, and hard filters applied before relevance scoring.
+            </p>
+          </div>
+        </div>
 
         <div className="pf-reg">
           <Setting
             id="pf-roles"
-            label="Roles"
-            note="Titles worth surfacing. For example: Backend Engineer, Node.js Developer"
+            label="Target Roles"
+            note="Titles to surface. Jobs matching these titles receive prioritized scoring."
+            required
           >
-            <input
+            <TagInput
               id="pf-roles"
-              className="pf-input"
-              value={roles}
-              onChange={(e) => setRoles(e.target.value)}
+              placeholder="e.g. Backend Engineer, Distributed Systems, Fullstack"
+              tags={roles}
+              onChange={(t) => {
+                setRoles(t)
+                setIsDirty(true)
+              }}
             />
-            <Tokens value={roles} />
           </Setting>
 
           <Setting
             id="pf-locations"
-            label="Locations"
-            note="Where you will actually work. For example: Bengaluru, Remote"
+            label="Preferred Locations"
+            note="Where you want to work. Include Remote and cities you'd relocate to."
+            required
           >
-            <input
+            <TagInput
               id="pf-locations"
-              className="pf-input"
-              value={locations}
-              onChange={(e) => setLocations(e.target.value)}
+              placeholder="e.g. Bengaluru, Remote, Mumbai, Hybrid"
+              tags={locations}
+              onChange={(t) => {
+                setLocations(t)
+                setIsDirty(true)
+              }}
             />
-            <Tokens value={locations} />
           </Setting>
 
           <Setting
             id="pf-musthaves"
-            label="Must-haves"
-            note="Deal-breakers. For example: Remote, No on-call"
+            label="Must-Haves / Deal-Breakers"
+            note="Hard criteria. Postings violating these will be filtered out."
           >
-            <input
+            <TagInput
               id="pf-musthaves"
-              className="pf-input"
-              value={mustHaves}
-              onChange={(e) => setMustHaves(e.target.value)}
+              placeholder="e.g. Remote, No On-Call, Product Startup"
+              tags={mustHaves}
+              onChange={(t) => {
+                setMustHaves(t)
+                setIsDirty(true)
+              }}
             />
-            <Tokens value={mustHaves} />
           </Setting>
 
           <Setting
             id="pf-cvvariants"
-            label="CV variants"
-            note="Labels for the résumé versions you keep. For example: Backend, Fullstack, Platform"
+            label="CV Tag Variants"
+            note="Labels for different positioning angles (e.g. Systems, AI Infra)."
           >
-            <input
+            <TagInput
               id="pf-cvvariants"
-              className="pf-input"
-              value={cvVariants}
-              onChange={(e) => setCvVariants(e.target.value)}
+              placeholder="e.g. Backend, Systems, AI-Infra"
+              tags={cvVariants}
+              onChange={(t) => {
+                setCvVariants(t)
+                setIsDirty(true)
+              }}
             />
-            <Tokens value={cvVariants} />
           </Setting>
 
           <Setting
             id="pf-maxyoe"
-            label="Experience ceiling"
-            note={
-              <>
-                Roles asking for more — senior / lead / principal, or “N+ years” — are
-                filtered out of your matches. 2–3 for a junior search.
-              </>
-            }
+            label="Experience Ceiling"
+            note="Roles asking for more YoE (e.g. Lead, Staff) are filtered out."
           >
-            <span className="pf-num">
+            <span className="pf-num-control">
               <input
                 id="pf-maxyoe"
-                className="pf-input"
+                className="pf-input pf-num-input"
                 type="number"
                 min="0"
                 max="20"
                 step="1"
                 value={maxYoE}
-                onChange={(e) => setMaxYoE(e.target.value)}
+                onChange={(e) => {
+                  setMaxYoE(e.target.value)
+                  setIsDirty(true)
+                }}
               />
-              <span className="pf-unit" aria-hidden="true">
-                years
-              </span>
+              <span className="pf-unit-badge">Years max</span>
             </span>
           </Setting>
 
           <Setting
             id="pf-salary"
             label="Salary floor"
-            note="Minimum acceptable, in lakhs per annum. Leave blank for none."
+            note="Minimum acceptable pay — anything you won't take."
           >
-            <span className="pf-num">
-              <input
-                id="pf-salary"
-                className="pf-input"
-                type="number"
-                min="0"
-                step="0.5"
-                value={salaryFloor}
-                onChange={(e) => setSalaryFloor(e.target.value)}
-              />
-              <span className="pf-unit" aria-hidden="true">
-                LPA
+            <span className="pf-salary">
+              <span className="pf-num-control">
+                <input
+                  id="pf-salary"
+                  className="pf-input pf-num-input"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="e.g. 1500000"
+                  value={salaryAmount}
+                  onChange={(e) => {
+                    setSalaryAmount(e.target.value)
+                    setIsDirty(true)
+                  }}
+                  onBlur={(e) => {
+                    const formatted = formatSalaryAmount(e.target.value)
+                    if (formatted !== e.target.value) setSalaryAmount(formatted)
+                  }}
+                />
+                {salaryAmount && (
+                  <button
+                    type="button"
+                    className="pf-clear-btn"
+                    aria-label="Clear salary floor"
+                    onClick={() => {
+                      setSalaryAmount('')
+                      setIsDirty(true)
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
+              <select
+                className="pf-input pf-currency"
+                aria-label="Salary currency"
+                value={salaryCurrency}
+                onChange={(e) => {
+                  setSalaryCurrency(e.target.value)
+                  setIsDirty(true)
+                }}
+              >
+                <option value="INR">₹ INR</option>
+                <option value="USD">$ USD</option>
+                <option value="EUR">€ EUR</option>
+                <option value="GBP">£ GBP</option>
+              </select>
+              <span className="pf-seg" role="group" aria-label="Salary period">
+                {(['year', 'month', 'hour'] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`pf-seg-btn${salaryPeriod === p ? ' is-on' : ''}`}
+                    aria-pressed={salaryPeriod === p}
+                    onClick={() => {
+                      setSalaryPeriod(p)
+                      setIsDirty(true)
+                    }}
+                  >
+                    {p === 'year' ? 'per year' : p === 'month' ? 'per month' : 'per hour'}
+                  </button>
+                ))}
               </span>
             </span>
           </Setting>
@@ -426,12 +680,19 @@ export default function ProfileView({
 
         <div className="pf-commit">
           <p className="pf-commit-note">
-            Edits stay on this page until you save. The server tidies up the lists and
-            hands them straight back.
+            Saving updates your matching parameters immediately across your pipeline.
           </p>
           <div className="pf-commit-actions">
-            {saved && <span className="pf-saved">Saved</span>}
+            {saved && (
+              <span className="pf-saved">
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M3 8.5l3.5 3.5L13 4" />
+                </svg>
+                Saved
+              </span>
+            )}
             <button
+              type="button"
               className="pf-btn pf-btn-go"
               onClick={handleSave}
               disabled={saving}
@@ -442,11 +703,10 @@ export default function ProfileView({
         </div>
       </section>
 
+      {/* Section 3: AI Scoring Keys */}
       <KeySettings onUnauthorized={onUnauthorized} />
 
-      {/* What the app is spending, then what is currently working. Both were
-          buried at the bottom of the danger zone, which put a routine reading
-          next to the one control on the page that cannot be undone. */}
+      {/* Section 4: System Usage & Telemetry */}
       <section className="pf-sec">
         <ApiUsage />
       </section>
@@ -455,37 +715,39 @@ export default function ProfileView({
         <SystemStatus />
       </section>
 
+      {/* Section 5: Account Danger Zone */}
       <section className="pf-sec pf-sec-danger">
         <h2 className="sec-title">Delete account</h2>
         <p className="sec-sub">
-          Deleting your account permanently removes your résumé, scores, pipeline and
-          outreach drafts. Shared job listings are not affected. This cannot be undone.
+          Permanently removes your résumé, score evaluations, pipeline and drafts. Shared job listings remain unaffected.
         </p>
 
         <div className={`pf-danger${confirmingDelete ? ' pf-danger-armed' : ''}`}>
           <div className="pf-led">
             <span className="pf-led-term">Deleted</span>
-            <span>Your résumé, scores and reasons, pipeline and notes, outreach drafts</span>
+            <span>Your résumé, match scores, saved job state, outreach drafts</span>
           </div>
           <div className="pf-led pf-led-keep">
-            <span className="pf-led-term">Kept</span>
-            <span>Shared job listings — those are not yours to delete</span>
+            <span className="pf-led-term">Preserved</span>
+            <span>Shared job aggregator pool</span>
           </div>
 
           <div className="pf-danger-act">
             {confirmingDelete ? (
               <>
                 <p className="pf-danger-arm">
-                  Everything in the first row goes. There is no undo and no export.
+                  This action is permanent and cannot be undone.
                 </p>
                 <button
+                  type="button"
                   className="pf-btn pf-btn-red pf-btn-red-armed"
                   onClick={handleDeleteAccount}
                   disabled={deleting}
                 >
-                  {deleting ? 'Deleting…' : 'Yes, delete everything'}
+                  {deleting ? 'Deleting…' : 'Confirm Delete Everything'}
                 </button>
                 <button
+                  type="button"
                   className="pf-btn"
                   onClick={() => setConfirmingDelete(false)}
                   disabled={deleting}
@@ -495,6 +757,7 @@ export default function ProfileView({
               </>
             ) : (
               <button
+                type="button"
                 className="pf-btn pf-btn-red"
                 onClick={() => setConfirmingDelete(true)}
               >

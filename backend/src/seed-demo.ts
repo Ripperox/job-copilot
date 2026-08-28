@@ -18,7 +18,7 @@ Built real-time services with WebSockets and load-tested them under concurrency.
 Comfortable with SQL query optimisation, Docker, and AWS.`,
   roles: ['Backend Engineer', 'Full Stack Engineer'],
   locations: ['Bengaluru', 'Remote'],
-  salaryFloorLPA: null,
+  salaryFloor: { amount: null, currency: 'INR', period: 'year' },
   maxYoE: 3,
   mustHaves: ['Node.js', 'PostgreSQL'],
   cvVariants: ['Backend', 'AI', 'Blockchain'],

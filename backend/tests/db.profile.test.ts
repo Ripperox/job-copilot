@@ -8,7 +8,7 @@ const profile: Profile = {
   resumeText: 'Backend engineer, Node and Postgres.',
   roles: ['Backend Engineer', 'Full Stack Engineer'],
   locations: ['Bengaluru', 'Remote'],
-  salaryFloorLPA: 15,
+  salaryFloor: { amount: 1_500_000, currency: 'INR', period: 'year' },
   maxYoE: 3,
   mustHaves: ['Node', 'SQL'],
   cvVariants: ['Backend', 'AI', 'Blockchain'],
@@ -34,9 +34,13 @@ describe('db profile', () => {
   });
 
   it('handles a null salary floor and null maxYoE', async () => {
-    await db.setProfile(TEST_USER_ID, { ...profile, salaryFloorLPA: null, maxYoE: null });
+    await db.setProfile(TEST_USER_ID, {
+      ...profile,
+      salaryFloor: { amount: null, currency: 'INR', period: 'year' },
+      maxYoE: null,
+    });
     const got = await db.getProfile(TEST_USER_ID);
-    expect(got?.salaryFloorLPA).toBeNull();
+    expect(got?.salaryFloor.amount).toBeNull();
     expect(got?.maxYoE).toBeNull();
   });
 
