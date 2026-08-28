@@ -480,6 +480,47 @@
   border-color: var(--line-strong);
 }
 
+/* --- score legend bar --- */
+.dsh-score-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: var(--s2);
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+}
+
+.dsh-legend-band {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  height: 20px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: opacity var(--dur-1) var(--ease);
+}
+
+.dsh-legend-80 { background: var(--score-hi); color: #062516; }
+.dsh-legend-70 { background: color-mix(in srgb, var(--score-hi) 78%, var(--accent)); color: #052013; }
+.dsh-legend-60 { background: color-mix(in srgb, var(--score-hi) 55%, var(--accent)); color: #051a10; }
+.dsh-legend-50 { background: color-mix(in srgb, var(--accent) 75%, var(--score-hi)); color: #1a1a05; }
+.dsh-legend-0 { background: var(--panel-3); color: var(--faint); border: 1px solid var(--line); }
+
+@media (max-width: 860px) {
+  .dsh-score-legend {
+    margin-left: 0;
+    margin-top: var(--s1);
+    width: 100%;
+    justify-content: space-between;
+  }
+  .dsh-legend-band {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 /* --- status --- */
 
 .dsh-tabs {

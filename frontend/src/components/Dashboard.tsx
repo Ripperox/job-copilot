@@ -25,7 +25,7 @@ const SCORE_OPTIONS = [0, 50, 60, 70, 80]
 
 const SCORE_LEGEND = {
   0: 'Show every role, scored or not.',
-  50: '50+ = partial match: right level but different primary stack (.NET, PHP, Vue-only, etc.) or weaker overlap.',
+  50: '50+ = partial match: right level but different primary stack or weaker overlap.',
   60: '60+ = stronger partial: related stack, good experience overlap.',
   70: '70+ = very close: same stack family, right level, minor gaps.',
   80: '80+ = APPLY: backend OR full-stack at your level with a related stack.',
@@ -428,6 +428,13 @@ export default function Dashboard({
             </button>
           ))}
         </div>
+        <div className="dsh-score-legend" aria-hidden="true">
+          <span className="dsh-legend-band dsh-legend-80" title="80+ = Apply now: right stack, right level">80+ Apply</span>
+          <span className="dsh-legend-band dsh-legend-70" title="70-79 = Very close match">70–79 Close</span>
+          <span className="dsh-legend-band dsh-legend-60" title="60-69 = Strong partial match">60–69 Partial</span>
+          <span className="dsh-legend-band dsh-legend-50" title="50-59 = Partial match">50–59 Weak</span>
+          <span className="dsh-legend-band dsh-legend-0" title="Below 50 = Wrong level or stack">Below 50</span>
+        </div>
       </div>
 
       <div className="dsh-ctl dsh-ctl-status">
@@ -522,16 +529,17 @@ export default function Dashboard({
     if (career && !scrapingOn) {
       return (
         <div className="dsh-empty">
-          <h3 className="dsh-empty-t">Career-page reading isn’t switched on</h3>
+          <h3 className="dsh-empty-t">Career pages not configured</h3>
           <p className="dsh-empty-b">
-            This dashboard reads roles directly off company career pages. That
-            needs a scraping provider — Firecrawl or Tavily — configured on the
-            server, along with the list of career-page URLs to watch.
+            This dashboard needs a scraping provider (Firecrawl or Tavily) and a list of career-page URLs on the server.
           </p>
-          <p className="dsh-empty-b">
-            Until then the job boards dashboard is where your listings will show
-            up.
-          </p>
+          {onSwitchView && (
+            <div className="dsh-empty-acts">
+              <button className="dsh-btn dsh-btn-primary" onClick={() => onSwitchView('job-boards')}>
+                Switch to Job Boards
+              </button>
+            </div>
+          )}
         </div>
       )
     }
@@ -551,21 +559,15 @@ export default function Dashboard({
             </div>
             <h3 className="dsh-empty-t">Add your résumé to see match scores</h3>
             <p className="dsh-empty-b">
-              <span className="dsh-num">{poolForView.toLocaleString()}</span>{' '}
-              {career ? 'career-page' : 'API'} {poolForView === 1 ? 'role' : 'roles'} are waiting.
-              Add your résumé and they get scored against your stack.
+              <span className="dsh-num">{poolForView.toLocaleString()}</span> {career ? 'career-page' : 'API'} roles waiting. Add your résumé and they get scored.
             </p>
             <div className="dsh-empty-acts">
               {onSwitchView && (
-                <button
-                  type="button"
-                  className="dsh-btn dsh-btn-primary"
-                  onClick={() => onSwitchView('profile')}
-                >
-                  Add résumé in Profile →
+                <button className="dsh-btn dsh-btn-primary" onClick={() => onSwitchView('profile')}>
+                  Add résumé in Profile
                 </button>
               )}
-              <button type="button" className="dsh-btn dsh-btn-go" onClick={() => setMinScore(0)}>
+              <button className="dsh-btn dsh-btn-go" onClick={() => setMinScore(0)}>
                 Show all {poolForView} without scoring
               </button>
             </div>
@@ -573,45 +575,26 @@ export default function Dashboard({
         )
       }
 
-      // Say the NUMBERS. "Nothing scores 50 or higher" on its own reads as
-      // "this feature is broken" when the truth is "19 roles exist and they are
-      // all weak" — and it never mentions that the other dashboard is full,
-      // which is the single most useful thing to know from here.
-      const other = career ? 'API sources' : 'Career pages'
+      const other = career ? 'Job Boards' : 'Career Pages'
+      const otherLabel = career ? 'job-boards' : 'career-pages'
       return (
         <div className="dsh-empty">
-          <h3 className="dsh-empty-t">
-            Nothing scores <span className="dsh-num">{minScore}</span> or higher
-          </h3>
+          <h3 className="dsh-empty-t">Nothing scores <span className="dsh-num">{minScore}</span>+</h3>
           <p className="dsh-empty-b">
-            {poolForView === 1 ? 'One role' : `${poolForView} roles`} scored below{' '}
-            <span className="dsh-num">{minScore}</span>. Lower the bar to see them.
+            {poolForView === 1 ? 'One role' : `${poolForView} roles`} scored below <span className="dsh-num">{minScore}</span>.
           </p>
-          <p className="dsh-empty-b">
-            {otherCount > 0 ? (
-              <>
-                <span className="dsh-num">{otherCount}</span>{' '}
-                {otherCount === 1 ? 'role' : 'roles'} on <strong>{other}</strong> clear it.
-              </>
-            ) : (
-              <>Nothing on <strong>{other}</strong> clears it either.</>
-            )}
-          </p>
+          {otherCount > 0 && (
+            <p className="dsh-empty-b">
+              <span className="dsh-num">{otherCount}</span> {otherCount === 1 ? 'role' : 'roles'} on <strong>{other}</strong> clear it.
+            </p>
+          )}
           <div className="dsh-empty-acts">
-            {/* When the matches are on the OTHER dashboard, going there is the
-                useful next step, so it gets the primary action. Stating where
-                the jobs are and leaving someone to find the tab is not help —
-                this exact screen was read as "broken" four times running. */}
             {otherCount > 0 && onSwitchView && (
-              <button
-                type="button"
-                className="dsh-btn dsh-btn-primary"
-                onClick={() => onSwitchView(career ? 'job-boards' : 'career-pages')}
-              >
+              <button className="dsh-btn dsh-btn-primary" onClick={() => onSwitchView(otherLabel)}>
                 Go to {other} ({otherCount})
               </button>
             )}
-            <button type="button" className="dsh-btn dsh-btn-go" onClick={() => setMinScore(0)}>
+            <button className="dsh-btn dsh-btn-go" onClick={() => setMinScore(0)}>
               Show all {poolForView} here
             </button>
           </div>
@@ -623,10 +606,7 @@ export default function Dashboard({
       return (
         <div className="dsh-empty">
           <h3 className="dsh-empty-t">No career-page roles yet</h3>
-          <p className="dsh-empty-b">
-            Career pages are re-read every few hours, so this list fills slowly on purpose. Run
-            a fetch to check now.
-          </p>
+          <p className="dsh-empty-b">Career pages refresh every few hours. Run a fetch to check now.</p>
         </div>
       )
     }
@@ -634,48 +614,29 @@ export default function Dashboard({
     return (
       <div className="dsh-empty">
         <h3 className="dsh-empty-t">No board listings yet</h3>
-        <p className="dsh-empty-b">
-          These come from company ATS boards and aggregators. A fetch fills this up in about a
-          minute.
-        </p>
+        <p className="dsh-empty-b">ATS boards and aggregators. A fetch fills this up in about a minute.</p>
         {minScore > 0 && (
-          <p className="dsh-empty-b">
-            You are also filtering to <span className="dsh-num">{minScore}</span>+ — lowering
-            that shows more.
-          </p>
-        )}
-        {minScore > 0 && (
-          <div className="dsh-empty-acts">
-            <button type="button" className="dsh-btn dsh-btn-go" onClick={() => setMinScore(0)}>
-              Show every score
-            </button>
-          </div>
+          <>
+            <p className="dsh-empty-b">Filtering to <span className="dsh-num">{minScore}</span>+ — lowering shows more.</p>
+            <div className="dsh-empty-acts">
+              <button className="dsh-btn dsh-btn-go" onClick={() => setMinScore(0)}>Show every score</button>
+            </div>
+          </>
         )}
       </div>
     )
   }
 
   function emptyStatus(): ReactNode {
-    const label =
-      statusFilter === 'all' ? '' : STATUS_LABELS[statusFilter].toLowerCase()
+    const label = statusFilter === 'all' ? '' : STATUS_LABELS[statusFilter].toLowerCase()
     return (
       <div className="dsh-empty">
         <h3 className="dsh-empty-t">Nothing is marked {label}</h3>
         <p className="dsh-empty-b">
-          {jobs.length === 1
-            ? 'Your one match is in a different status.'
-            : `None of your ${jobs.length} matches are in this status yet.`}{' '}
-          Statuses move as you work: mark a role Outreach when you message
-          someone, Applied when you send it.
+          {jobs.length === 1 ? 'Your one match is in a different status.' : `None of ${jobs.length} matches are in this status.`}
         </p>
         <div className="dsh-empty-acts">
-          <button
-            type="button"
-            className="dsh-btn dsh-btn-go"
-            onClick={() => setStatusFilter('all')}
-          >
-            Show all {jobs.length}
-          </button>
+          <button className="dsh-btn dsh-btn-go" onClick={() => setStatusFilter('all')}>Show all {jobs.length}</button>
         </div>
       </div>
     )
@@ -702,19 +663,11 @@ export default function Dashboard({
       <div className="dsh-empty">
         <h3 className="dsh-empty-t">No matches in “{locationFilter}”</h3>
         <p className="dsh-empty-b">
-          {jobs.length === 1
-            ? 'Your one match isn’t in that location.'
-            : `None of your ${jobs.length} matches have that location.`}{' '}
+          {jobs.length === 1 ? 'Your one match isn’t in that location.' : `None of ${jobs.length} matches have that location.`}
           Try “NL”, “Netherlands”, a city, or clear the filter.
         </p>
         <div className="dsh-empty-acts">
-          <button
-            type="button"
-            className="dsh-btn dsh-btn-go"
-            onClick={() => setLocationFilter('')}
-          >
-            Clear location filter
-          </button>
+          <button className="dsh-btn dsh-btn-go" onClick={() => setLocationFilter('')}>Clear location filter</button>
         </div>
       </div>
     )
@@ -873,27 +826,22 @@ export default function Dashboard({
   if (career) {
     return (
       <div className="dsh dsh-career">
-        <header className="dsh-head">
-          <div className="dsh-head-txt">
-            <p className="dsh-eyebrow">
-              <span className="dsh-dot" aria-hidden="true" />
-              Career pages
-            </p>
-            <h2 className="dsh-h1">Scraped off company career pages</h2>
-            <p className="dsh-lede">
-              Few, fresh, barely contested. Read each one properly.
-            </p>
-          </div>
-          <div className="dsh-head-run">
-            {runPanel}
-            {phase === 'idle' && (
-              <p className="dsh-fine">
-                Career pages are only re-read every few hours, so a fetch will
-                not always change this list.
-              </p>
-            )}
-          </div>
-        </header>
+<header className="dsh-head">
+        <div className="dsh-head-txt">
+          <p className="dsh-eyebrow">
+            <span className="dsh-dot" aria-hidden="true" />
+            Career Pages
+          </p>
+          <h2 className="dsh-h1">Roles scraped from company career pages</h2>
+          <p className="dsh-lede">Few, fresh, barely contested. Read each one properly.</p>
+        </div>
+        <div className="dsh-head-run">
+          {runPanel}
+          {phase === 'idle' && (
+            <p className="dsh-fine">Career pages re-read every few hours — fetch may not change the list.</p>
+          )}
+        </div>
+      </header>
 
         {controls}
         {feedback}
@@ -939,11 +887,9 @@ export default function Dashboard({
     <div className="dsh dsh-boards">
       <header className="dsh-head">
         <div className="dsh-head-txt">
-          <p className="dsh-eyebrow">API sources</p>
-          <h2 className="dsh-h1">Everything pulled through an API</h2>
-          <p className="dsh-lede">
-            ATS boards and aggregators, all scored. Set a floor and work down.
-          </p>
+          <p className="dsh-eyebrow">Job Boards</p>
+          <h2 className="dsh-h1">Roles from ATS boards and aggregators</h2>
+          <p className="dsh-lede">ATS boards and aggregators, all scored. Set a floor and work down.</p>
         </div>
 
         <div className="dsh-head-run">

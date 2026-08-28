@@ -366,13 +366,13 @@ export default function ProfileView({
           <div className="pf-summary-item">
             <span className="pf-summary-label">Salary Floor</span>
             <span className={salaryAmount.trim() ? 'pf-summary-val pf-summary-ok' : 'pf-summary-val pf-summary-missing'}>
-              {salaryAmount.trim() ? `${currencySymbol}${Number(salaryAmount.replace(/[, ]/g, '')).toLocaleString()} per ${salaryPeriod}` : 'Not set'}
+              {salaryAmount.trim() ? `${currencySymbol}${Number(salaryAmount.replace(/[, ]/g, '')).toLocaleString()} / ${salaryPeriod}` : 'Not set'}
             </span>
           </div>
           <div className="pf-summary-item">
             <span className="pf-summary-label">Experience Ceiling</span>
             <span className={maxYoE.trim() ? 'pf-summary-val pf-summary-ok' : 'pf-summary-val pf-summary-missing'}>
-              {maxYoE.trim() ? `${maxYoE} years max` : 'Not set'}
+              {maxYoE.trim() ? `${maxYoE} yr max` : 'Not set'}
             </span>
           </div>
           <div className="pf-summary-item">
@@ -384,14 +384,11 @@ export default function ProfileView({
           <div className="pf-summary-item">
             <span className="pf-summary-label">CV Variants</span>
             <span className={cvVariants.length ? 'pf-summary-val pf-summary-ok' : 'pf-summary-val pf-summary-missing'}>
-              {cvVariants.length ? cvVariants.join(', ') : 'Using defaults'}
+              {cvVariants.length ? cvVariants.join(', ') : 'Defaults'}
             </span>
           </div>
         </div>
-        <p className="pf-summary-hint">
-          Every job is scored against all of the above. Missing fields are treated as "no
-          preference" — you will see more roles, but less targeted matches.
-        </p>
+        <p className="pf-summary-hint">Missing fields = no preference (wider but less targeted matches).</p>
       </section>
 
       {/* Section 1: Résumé */}
@@ -399,9 +396,7 @@ export default function ProfileView({
         <div className="pf-sec-head">
           <div>
             <h2 className="sec-title">Your Résumé</h2>
-            <p className="sec-sub">
-              Upload your PDF or paste your résumé. Every job is scored against this exact text.
-            </p>
+            <p className="sec-sub">Upload PDF or paste text. Every job is scored against this exact text.</p>
           </div>
           {chars > 0 && (
             <span className="pf-badge pf-badge-ok">
@@ -510,9 +505,7 @@ export default function ProfileView({
         <div className="pf-sec-head">
           <div>
             <h2 className="sec-title">Matching Preferences</h2>
-            <p className="sec-sub">
-              Target titles, locations, and hard filters applied before relevance scoring.
-            </p>
+            <p className="sec-sub">Titles, locations, and hard filters applied before scoring.</p>
           </div>
         </div>
 
@@ -520,7 +513,7 @@ export default function ProfileView({
           <Setting
             id="pf-roles"
             label="Target Roles"
-            note="Titles to surface. Jobs matching these titles receive prioritized scoring."
+            note="Titles to prioritize. Jobs matching these score higher."
             required
           >
             <TagInput
@@ -554,7 +547,7 @@ export default function ProfileView({
           <Setting
             id="pf-musthaves"
             label="Must-Haves / Deal-Breakers"
-            note="Hard criteria. Postings violating these will be filtered out."
+            note="Hard criteria. Posts violating these are filtered out."
           >
             <TagInput
               id="pf-musthaves"
@@ -570,7 +563,7 @@ export default function ProfileView({
           <Setting
             id="pf-cvvariants"
             label="CV Tag Variants"
-            note="Labels for different positioning angles (e.g. Systems, AI Infra)."
+            note="Labels for different positioning (e.g. Systems, AI Infra)."
           >
             <TagInput
               id="pf-cvvariants"
@@ -586,7 +579,7 @@ export default function ProfileView({
           <Setting
             id="pf-maxyoe"
             label="Experience Ceiling"
-            note="Roles asking for more YoE (e.g. Lead, Staff) are filtered out."
+            note="Roles asking for more YoE (Lead, Staff) are filtered out."
           >
             <span className="pf-num-control">
               <input

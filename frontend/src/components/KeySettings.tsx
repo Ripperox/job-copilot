@@ -3,8 +3,6 @@ import type { KeyStatus } from '../api'
 import { UnauthorizedError, deleteKey, getKeyStatus, saveKey } from '../api'
 import '../styles/profile.css'
 
-const PROVIDERS = ['groq', 'gemini', 'anthropic'] as const
-
 // Bring-your-own-key. The key is validated by the server against the provider
 // before it is stored, encrypted at rest, and never sent back to the browser —
 // we only ever display the mask the server returns.
@@ -75,30 +73,15 @@ export default function KeySettings({
     <section className="pf-sec">
       <h2 className="sec-title">Scoring key</h2>
       <p className="sec-sub">
-        Every role is read and scored against your résumé, and that runs on{' '}
-        <strong>your own API key</strong> — so the usage, the limits and the logs stay
-        yours. Paste a key from Groq, Google Gemini or Anthropic and the server works out
-        which it is.{' '}
-        <a
-          className="pf-link"
-          href="https://console.groq.com/keys"
-          target="_blank"
-          rel="noreferrer"
-        >
+        Add a Groq, Gemini or Anthropic key to let the model read each posting and explain its score.
+        <a className="pf-link" href="https://console.groq.com/keys" target="_blank" rel="noreferrer">
           Get a free Groq key →
-        </a>{' '}
-        (recommended — the most generous free tier by far)
+        </a>
       </p>
 
-      {error && (
-        <div className="pf-alert" role="alert">
-          {error}
-        </div>
-      )}
+      {error && <div className="pf-alert" role="alert">{error}</div>}
 
       <div className="pf-keypanel">
-        {/* Status line: provider + the server-side mask. The raw key never
-            comes back from the server, so there is nothing else to show. */}
         <div className="pf-kp-head">
           <span className="pf-kp-headkey">Status</span>
           {hasKey ? (
@@ -108,52 +91,18 @@ export default function KeySettings({
               {saved && <span className="pf-saved">Updated</span>}
             </>
           ) : (
-            <>
-              <span className="u-pill pf-st-off">No key — keyword scoring</span>
-              {/* Which providers the server can recognise — only worth showing
-                  while there is nothing to detect yet. */}
-              <span className="pf-providers">
-                <span className="pf-prov-lead">Accepts</span>
-                {PROVIDERS.map((p) => (
-                  <span key={p} className="pf-prov">
-                    {p}
-                  </span>
-                ))}
-              </span>
-            </>
+            <span className="u-pill pf-st-off">No key — keyword scoring only</span>
           )}
-        </div>
-
-        {/* The trust story, as structure rather than reassurance. */}
-        <div className="pf-led">
-          <span className="pf-led-term">Validated</span>
-          <span>
-            Checked against the provider before it is accepted, so a typo fails here and
-            not halfway through a scoring run.
-          </span>
-        </div>
-        <div className="pf-led">
-          <span className="pf-led-term">Encrypted</span>
-          <span>Encrypted before it touches the database. Nothing is written in plain text.</span>
-        </div>
-        <div className="pf-led pf-led-keep">
-          <span className="pf-led-term">Never shown again</span>
-          <span>
-            It is never returned to this browser — the {status?.mask ? 'mask above' : 'mask'} is
-            all the server will hand back.
-          </span>
         </div>
 
         <p className="pf-kp-note">
           {hasKey
-            ? 'Replace it by pasting a new key below, or remove it to fall back to keyword-only scoring.'
-            : 'No key yet — roles are ranked by keyword overlap and outreach comes from a template. Add a key and each posting gets read properly, with a reason for its score.'}
+            ? 'Paste a new key below to replace, or remove to fall back to keyword matching.'
+            : 'Without a key, roles are ranked by keyword overlap only — no written reasons.'}
         </p>
 
         <div className="pf-keyform">
-          <label className="pf-key pf-keylabel" htmlFor="pf-apikey">
-            API key
-          </label>
+          <label className="pf-key pf-keylabel" htmlFor="pf-apikey">API key</label>
           <input
             id="pf-apikey"
             className="pf-input pf-keyinput"
@@ -177,10 +126,7 @@ export default function KeySettings({
           )}
         </div>
 
-        <p className="pf-foot">
-          Your key is encrypted before it is stored and is never shown again after saving.
-          It is used only to score jobs and draft outreach for your account.
-        </p>
+        <p className="pf-foot">Your key is encrypted at rest and never shown again after saving.</p>
       </div>
     </section>
   )
