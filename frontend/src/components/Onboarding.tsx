@@ -102,6 +102,8 @@ export default function Onboarding({
   const resumeDone = (setup?.resumeChars ?? 0) > 0
   const keyDone = setup?.hasKey === true
   const jobsDone = (setup?.jobCount ?? 0) > 0
+  // Step 3 is only done once the user has added a résumé AND matching jobs exist.
+  const matchesDone = resumeDone && jobsDone
   // The key is genuinely optional, so it does not gate "set up".
   const complete = Boolean(setup) && resumeDone && jobsDone
 
@@ -140,7 +142,7 @@ export default function Onboarding({
     )
   }
 
-  const doneCount = [resumeDone, keyDone, jobsDone].filter(Boolean).length
+  const doneCount = [resumeDone, keyDone, matchesDone].filter(Boolean).length
   // The first unfinished step gets the emphasis; everything after it stays calm.
   const next: 1 | 2 | 3 = !resumeDone ? 1 : !keyDone && !keySkipped ? 2 : 3
 
@@ -215,12 +217,12 @@ export default function Onboarding({
 
         <Step
           index={3}
-          state={jobsDone ? 'done' : 'todo'}
+          state={matchesDone ? 'done' : 'todo'}
           emphasis={next === 3}
           title="See your matches"
           why="Postings are already collected from company career pages and the job boards. Saving your résumé starts scoring them against it."
           done={
-            jobsDone ? (
+            matchesDone ? (
               <>
                 <span className="u-num">{setup.jobCount.toLocaleString()}</span> postings in your
                 pipeline
@@ -231,10 +233,10 @@ export default function Onboarding({
               // user has forgotten to press something.
               'Scoring your first batch now — this takes a minute or two. Refresh to check.'
             ) : (
-              'Starts on its own once your résumé is saved.'
+              `${setup.jobCount.toLocaleString()} live roles waiting to be scored once your résumé is saved.`
             )
           }
-          action={{ label: 'Go to career pages', to: 'career-pages' }}
+          action={{ label: matchesDone ? 'Go to career pages' : 'Add résumé first', to: matchesDone ? 'career-pages' : 'profile' }}
           onGo={onGo}
         />
       </ol>

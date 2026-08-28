@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { JobStatus, ScoredJob, SourceInfo, RescoreProgress } from '../api'
-import { JOB_STATUSES, UnauthorizedError, fetchJobs, getJobs, getRescoreStatus, getSources, startRescore } from '../api'
+import { JOB_STATUSES, UnauthorizedError, fetchJobs, getJobs, getProfile, getRescoreStatus, getSources, startRescore } from '../api'
 import JobCard from './JobCard'
 import DashError, { describeError } from './DashError'
 import type { DashErrorInfo } from './DashError'
@@ -62,7 +62,7 @@ export default function Dashboard({
   view: 'career-pages' | 'job-boards'
   onUnauthorized?: () => void
   /** Jump to the other dashboard — used by the empty state's cross-reference. */
-  onSwitchView?: (view: 'career-pages' | 'job-boards') => void
+  onSwitchView?: (view: 'career-pages' | 'job-boards' | 'profile') => void
 }) {
   const career = view === 'career-pages'
   const uid = useId()
@@ -88,6 +88,7 @@ export default function Dashboard({
   const [otherCount, setOtherCount] = useState(0)
   // Rows matching the filter on the server, which can exceed those returned.
   const [matchTotal, setMatchTotal] = useState(0)
+  const [hasResume, setHasResume] = useState<boolean | null>(null)
 
   // Guards against a slow response from the view you just left overwriting the
   // list of the view you are now looking at.
@@ -121,6 +122,20 @@ export default function Dashboard({
     },
     [career, onUnauthorized],
   )
+
+  useEffect(() => {
+    let active = true
+    getProfile()
+      .then((p) => {
+        if (active) setHasResume((p?.resumeText?.trim()?.length ?? 0) > 0)
+      })
+      .catch(() => {
+        if (active) setHasResume(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   // A different dashboard is a different product, not a filtered view of this
   // one — start it clean. Declared before the loader so it wins the render.
@@ -406,6 +421,42 @@ export default function Dashboard({
     }
 
     if (minScore > 0 && poolForView > 0) {
+      if (hasResume === false) {
+        return (
+          <div className="dsh-empty dsh-empty-onboard">
+            <div className="dsh-empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+              </svg>
+            </div>
+            <h3 className="dsh-empty-t">Upload your résumé to see match scores</h3>
+            <p className="dsh-empty-b">
+              There {poolForView === 1 ? 'is' : 'are'}{' '}
+              <span className="dsh-num">{poolForView.toLocaleString()}</span> {career ? 'career-page' : 'API'}{' '}
+              {poolForView === 1 ? 'role' : 'roles'} waiting in your pipeline. Once you add your résumé in Profile, we will score every job against your exact stack and experience.
+            </p>
+            <div className="dsh-empty-acts">
+              {onSwitchView && (
+                <button
+                  type="button"
+                  className="dsh-btn dsh-btn-primary"
+                  onClick={() => onSwitchView('profile')}
+                >
+                  Add résumé in Profile →
+                </button>
+              )}
+              <button type="button" className="dsh-btn dsh-btn-go" onClick={() => setMinScore(0)}>
+                Show all {poolForView} without scoring
+              </button>
+            </div>
+          </div>
+        )
+      }
+
       // Say the NUMBERS. "Nothing scores 50 or higher" on its own reads as
       // "this feature is broken" when the truth is "19 roles exist and they are
       // all weak" — and it never mentions that the other dashboard is full,

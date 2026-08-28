@@ -304,6 +304,29 @@
   .ob-actions {
     grid-column: 2;
     margin-top: var(--s2);
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--s2);
+  }
+
+  .ob-actions .ob-go {
+    width: 100%;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    box-sizing: border-box;
+  }
+
+  .ob-actions .ob-skip {
+    width: 100%;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
   }
 
   .ob-head {
@@ -314,5 +337,11 @@
   .ob-meta {
     justify-content: space-between;
     width: 100%;
+  }
+
+  .ob-hide {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
   }
 }

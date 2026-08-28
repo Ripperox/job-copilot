@@ -612,6 +612,18 @@
    resolves it — centred in a panel so it reads as settled rather than pending.
    -------------------------------------------------------------------------- */
 
+.dsh-empty-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  margin-bottom: var(--s1);
+}
+
 .dsh-empty {
   display: flex;
   flex-direction: column;
@@ -1035,7 +1047,19 @@
     flex: none;
   }
 
-  .dsh-empty {
+  .dsh-empty-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  margin-bottom: var(--s1);
+}
+
+.dsh-empty {
     padding: var(--s6) var(--s4);
   }
 
