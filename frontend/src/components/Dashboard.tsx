@@ -125,6 +125,10 @@ export default function Dashboard({
   const [jobs, setJobs] = useState<ScoredJob[]>([])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [locationFilter, setLocationFilter] = useState('')
+  const [locationSearch, setLocationSearch] = useState('')
+  const [locationMenuOpen, setLocationMenuOpen] = useState(false)
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false)
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<DashErrorInfo | null>(null)
   const [actionError, setActionError] = useState<{
@@ -199,6 +203,10 @@ export default function Dashboard({
   useEffect(() => {
     setStatusFilter('all')
     setLocationFilter('')
+    setLocationSearch('')
+    setStatusMenuOpen(false)
+    setLocationMenuOpen(false)
+    setMoreFiltersOpen(false)
     setJobs([])
     setNote(null)
     setActionError(null)
@@ -234,6 +242,18 @@ export default function Dashboard({
     const id = window.setTimeout(() => setNote(null), 9000)
     return () => window.clearTimeout(id)
   }, [note])
+
+  // Click outside to close dropdowns
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (statusMenuOpen && !target.closest('.dsh-dropdown')) setStatusMenuOpen(false)
+      if (locationMenuOpen && !target.closest('.dsh-dropdown')) setLocationMenuOpen(false)
+      if (moreFiltersOpen && !target.closest('.dsh-filter-group')) setMoreFiltersOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [statusMenuOpen, locationMenuOpen, moreFiltersOpen])
 
   // Local updates keep the counts honest without a refetch.
   const handleUpdated = useCallback((updated: ScoredJob) => {
@@ -375,6 +395,12 @@ export default function Dashboard({
     return want.filter((w) => jobs.some((j) => matchesLocation(j.location, w)))
   }, [jobs])
 
+  const filteredLocationChips = useMemo(() => {
+    if (!locationSearch.trim()) return locationChips
+    const q = locationSearch.toLowerCase()
+    return locationChips.filter((w) => w.toLowerCase().includes(q))
+  }, [locationChips, locationSearch])
+
   const freshCount = useMemo(
     () =>
       jobs.filter((j) => {
@@ -409,113 +435,138 @@ export default function Dashboard({
     : JOB_STATUSES
 
   const filters = (
-    <>
-      <div className="dsh-ctl">
-        <span className="dsh-ctl-k" id={`${uid}-score`}>
-          Score
-        </span>
-        <div className="dsh-scores" role="group" aria-labelledby={`${uid}-score`}>
+    <div className="dsh-filter-bar" role="search" aria-label="Job filters">
+      {/* Score — pill group (primary filter, always visible) */}
+      <div className="dsh-filter-group">
+        <div className="dsh-pill-group" role="group" aria-label="Minimum score">
           {SCORE_OPTIONS.map((s) => (
             <button
               key={s}
               type="button"
-              className={`dsh-score${s === minScore ? ' is-on' : ''}`}
+              className={`dsh-pill${s === minScore ? ' is-active' : ''}`}
               aria-pressed={s === minScore}
               title={SCORE_LEGEND[s as keyof typeof SCORE_LEGEND] ?? `Show roles scoring ${s} or higher.`}
               onClick={() => setMinScore(s)}
             >
-              {s === 0 ? 'Any' : <span className="dsh-num">{s}+</span>}
+              {s === 0 ? 'Any' : <span className="dsh-pill-num">{s}+</span>}
             </button>
           ))}
         </div>
-        <div className="dsh-score-legend" aria-hidden="true">
-          <span className="dsh-legend-band dsh-legend-80" title="80+ = Apply now: right stack, right level">80+ Apply</span>
-          <span className="dsh-legend-band dsh-legend-70" title="70-79 = Very close match">70–79 Close</span>
-          <span className="dsh-legend-band dsh-legend-60" title="60-69 = Strong partial match">60–69 Partial</span>
-          <span className="dsh-legend-band dsh-legend-50" title="50-59 = Partial match">50–59 Weak</span>
-          <span className="dsh-legend-band dsh-legend-0" title="Below 50 = Wrong level or stack">Below 50</span>
-        </div>
       </div>
 
-      <div className="dsh-ctl dsh-ctl-status">
-        <span className="dsh-ctl-k" id={`${uid}-status`}>
-          Status
-        </span>
-        <div className="dsh-tabs" role="tablist" aria-labelledby={`${uid}-status`}>
+      {/* Status — dropdown button (Indeed/ZipRecruiter pattern) */}
+      <div className="dsh-filter-group">
+        <div className="dsh-dropdown" role="combobox" aria-label="Status filter" aria-expanded={statusMenuOpen} aria-controls={`${uid}-status-menu`}>
           <button
             type="button"
-            role="tab"
-            aria-selected={statusFilter === 'all'}
-            aria-controls={listId}
-            className="dsh-tab dsh-c-all"
-            onClick={() => setStatusFilter('all')}
+            className={`dsh-dropdown-trigger${statusFilter !== 'all' ? ' has-value' : ''}`}
+            onClick={() => setStatusMenuOpen(!statusMenuOpen)}
+            aria-haspopup="listbox"
+            aria-controls={`${uid}-status-menu`}
           >
-            All
-            <span className="dsh-tab-n">{jobs.length}</span>
+            <span className="dsh-dropdown-label">
+              {statusFilter === 'all' ? 'All Status' : STATUS_LABELS[statusFilter]}
+            </span>
+            <span className="dsh-dropdown-count">{statusFilter === 'all' ? jobs.length : counts[statusFilter]}</span>
+            <svg className="dsh-dropdown-caret" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 6.2 8 10.2l4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
-          {statusChoices.map((s) => (
-            <button
-              key={s}
-              type="button"
-              role="tab"
-              aria-selected={statusFilter === s}
-              aria-controls={listId}
-              className={`dsh-tab dsh-c-${s} st-${s}`}
-              onClick={() => setStatusFilter(s)}
-            >
-              <i className="u-dot" aria-hidden="true" />
-              {STATUS_LABELS[s]}
-              <span className="dsh-tab-n">{counts[s]}</span>
-            </button>
-          ))}
+          {statusMenuOpen && (
+            <ul id={`${uid}-status-menu`} className="dsh-dropdown-menu" role="listbox" aria-label="Status options">
+              <li role="option" aria-selected={statusFilter === 'all'} className={statusFilter === 'all' ? 'is-selected' : ''} onClick={() => { setStatusFilter('all'); setStatusMenuOpen(false); }}>
+                <span>All Status</span>
+                <span className="dsh-dropdown-opt-count">{jobs.length}</span>
+              </li>
+              {statusChoices.map((s) => (
+                <li key={s} role="option" aria-selected={statusFilter === s} className={statusFilter === s ? 'is-selected' : ''} onClick={() => { setStatusFilter(s); setStatusMenuOpen(false); }}>
+                  <span className="dsh-opt-dot" style={{ '--dot-color': `var(--st-${s})` } as React.CSSProperties} aria-hidden="true" />
+                  <span>{STATUS_LABELS[s]}</span>
+                  <span className="dsh-dropdown-opt-count">{counts[s]}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
-      <div className="dsh-ctl dsh-ctl-loc">
-        <label className="dsh-ctl-k" htmlFor={`${uid}-loc`}>
-          Location
-        </label>
-        <div className="dsh-loc">
-          <span className="dsh-loc-pin" aria-hidden="true">
-            ⌖
-          </span>
-          <input
-            id={`${uid}-loc`}
-            className="dsh-loc-input"
-            type="text"
-            placeholder="City, country, or NL"
-            value={locationFilter}
-            onChange={(e) => setLocationFilter(e.target.value)}
-            spellCheck={false}
-          />
-          {locationFilter && (
-            <button
-              type="button"
-              className="dsh-loc-clear"
-              aria-label="Clear location filter"
-              onClick={() => setLocationFilter('')}
-            >
-              ×
-            </button>
+      {/* Location — pill with popover (LinkedIn pattern) */}
+      <div className="dsh-filter-group">
+        <div className="dsh-dropdown dsh-location-dropdown" role="combobox" aria-label="Location filter" aria-expanded={locationMenuOpen} aria-controls={`${uid}-location-menu`}>
+          <button
+            type="button"
+            className={`dsh-dropdown-trigger dsh-loc-trigger${locationFilter ? ' has-value' : ''}`}
+            onClick={() => setLocationMenuOpen(!locationMenuOpen)}
+            aria-haspopup="listbox"
+            aria-controls={`${uid}-location-menu`}
+          >
+            <svg className="dsh-loc-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M8 1a7 7 0 0 1 7 7c0 5.25-7 13-7 13S1 13.25 1 8a7 7 0 0 1 7-7z" fill="currentColor"/></svg>
+            <span className="dsh-dropdown-label">{locationFilter || 'Location'}</span>
+            {locationFilter && (
+              <button type="button" className="dsh-dropdown-clear" aria-label="Clear location" onClick={(e) => { e.stopPropagation(); setLocationFilter(''); }}>×</button>
+            )}
+            <svg className="dsh-dropdown-caret" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 6.2 8 10.2l4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          {locationMenuOpen && (
+            <div id={`${uid}-location-menu`} className="dsh-dropdown-menu dsh-loc-menu" role="listbox" aria-label="Location options">
+              <div className="dsh-loc-search">
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M7 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm5.58-1.42a4.5 4.5 0 1 1-6.36-6.36" fill="none" stroke="currentColor" strokeWidth="1.5"/></svg>
+                <input
+                  type="text"
+                  placeholder="Search locations..."
+                  value={locationSearch}
+                  onChange={(e) => setLocationSearch(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="dsh-loc-suggestions" role="listbox">
+                {filteredLocationChips.map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    role="option"
+                    aria-selected={locationFilter.trim() === w}
+                    className={`dsh-loc-opt${locationFilter.trim() === w ? ' is-selected' : ''}`}
+                    onClick={() => { setLocationFilter(locationFilter.trim() === w ? '' : w); setLocationMenuOpen(false); }}
+                  >
+                    <span className="dsh-loc-opt-icon" aria-hidden="true">⌖</span>
+                    <span>{w}</span>
+                  </button>
+                ))}
+                {locationFilter && !filteredLocationChips.includes(locationFilter) && (
+                  <button
+                    type="button"
+                    role="option"
+                    className="dsh-loc-opt is-custom"
+                    onClick={() => { setLocationMenuOpen(false); }}
+                  >
+                    <span className="dsh-loc-opt-icon" aria-hidden="true">⌖</span>
+                    <span>Use "{locationFilter}"</span>
+                  </button>
+                )}
+              </div>
+              {locationFilter && (
+                <button type="button" className="dsh-loc-clear-all" onClick={() => { setLocationFilter(''); setLocationMenuOpen(false); }}>Clear location filter</button>
+              )}
+            </div>
           )}
         </div>
-        {locationChips.length > 0 && (
-          <div className="dsh-loc-chips" role="group" aria-label="Quick locations">
-            {locationChips.map((w) => (
-              <button
-                key={w}
-                type="button"
-                className={`dsh-loc-chip${locationFilter.trim() === w ? ' is-on' : ''}`}
-                aria-pressed={locationFilter.trim() === w}
-                onClick={() => setLocationFilter(locationFilter.trim() === w ? '' : w)}
-              >
-                {w}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
-    </>
+
+      {/* More Filters button (progressive disclosure) */}
+      <div className="dsh-filter-group">
+        <button
+          type="button"
+          className="dsh-more-filters"
+          onClick={() => setMoreFiltersOpen(!moreFiltersOpen)}
+          aria-expanded={moreFiltersOpen}
+          aria-controls={`${uid}-more-filters`}
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 5h10M3 8h10M3 11h10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          More Filters
+        </button>
+      </div>
+    </div>
   )
 
   // ---- empty states ----
@@ -806,12 +857,70 @@ export default function Dashboard({
       </p>
     ) : null
 
+  // Active filter chips row (LinkedIn/Indeed pattern)
+  function ActiveFilterChips({
+    minScore,
+    statusFilter,
+    locationFilter,
+    counts,
+    onClearScore,
+    onClearStatus,
+    onClearLocation,
+  }: {
+    minScore: number
+    statusFilter: StatusFilter
+    locationFilter: string
+    counts: Record<JobStatus, number>
+    onClearScore: () => void
+    onClearStatus: () => void
+    onClearLocation: () => void
+  }) {
+    const hasAny = minScore > 0 || statusFilter !== 'all' || locationFilter
+    if (!hasAny) return null
+
+    return (
+      <div className="dsh-active-chips" role="status" aria-label="Active filters">
+        {minScore > 0 && (
+          <span className="dsh-chip" onClick={onClearScore}>
+            <span>Score {minScore}+</span>
+            <button type="button" className="dsh-chip-x" aria-label="Remove score filter">×</button>
+          </span>
+        )}
+        {statusFilter !== 'all' && (
+          <span className="dsh-chip" onClick={onClearStatus}>
+            <span className="dsh-chip-dot" style={{ '--dot-color': `var(--st-${statusFilter})` } as React.CSSProperties} aria-hidden="true" />
+            <span>{STATUS_LABELS[statusFilter]}</span>
+            <span className="dsh-chip-count">{counts[statusFilter]}</span>
+            <button type="button" className="dsh-chip-x" aria-label="Remove status filter">×</button>
+          </span>
+        )}
+        {locationFilter && (
+          <span className="dsh-chip" onClick={onClearLocation}>
+            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M8 1a7 7 0 0 1 7 7c0 5.25-7 13-7 13S1 13.25 1 8a7 7 0 0 1 7-7z" fill="currentColor"/></svg>
+            <span>{locationFilter}</span>
+            <button type="button" className="dsh-chip-x" aria-label="Remove location filter">×</button>
+          </span>
+        )}
+        <button type="button" className="dsh-chip dsh-chip-clear" onClick={() => { onClearScore(); onClearStatus(); onClearLocation(); }}>Clear all</button>
+      </div>
+    )
+  }
+
   const controls = (
     <section className="dsh-console" aria-label="Filters">
       <div className="dsh-console-in">
         {filters}
         {countLine}
       </div>
+      <ActiveFilterChips
+        minScore={minScore}
+        statusFilter={statusFilter}
+        locationFilter={locationFilter}
+        counts={counts}
+        onClearScore={() => setMinScore(0)}
+        onClearStatus={() => setStatusFilter('all')}
+        onClearLocation={() => setLocationFilter('')}
+      />
       {capped && (
         <p className="dsh-capped" role="status">
           Showing <span className="dsh-num">{jobs.length}</span> of{' '}
