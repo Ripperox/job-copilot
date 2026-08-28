@@ -1,90 +1,34 @@
-# Render blueprint for the Shortlist backend.
-# The backend needs a long-lived process (the hourly fetch scheduler runs in it),
-# so it is a web service rather than a serverless function.
-#
-# Deploy: push this repo to GitHub, then Render → New → Blueprint → pick the repo.
-# Secrets marked sync:false must be pasted into the Render dashboard; they are
-# never committed.
-
 services:
   - type: web
-    name: job-copilot-api
+    name: shortlist-backend
     runtime: node
     plan: free
-    rootDir: backend
-    buildCommand: npm install
+    region: oregon
+    buildCommand: npm install && npx tsc --noEmit
     startCommand: npm start
-    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-
-      # --- required ---
-      - key: DATABASE_URL          # Neon connection string (include ?sslmode=require)
-        sync: false
-      - key: SESSION_SECRET        # openssl rand -base64 48
-        sync: false
-      - key: KEY_ENCRYPTION_SECRET # openssl rand -base64 32 — changing this orphans stored user keys
-        sync: false
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: OAUTH_REDIRECT_URL    # https://<this-service>.onrender.com/api/auth/google/callback
-        sync: false
-      - key: FRONTEND_ORIGIN       # https://<your-app>.vercel.app  (comma-separated for several)
-        sync: false
-
-      # --- job sources (operator-side; the shared pool is fetched once for everyone) ---
-      - key: ADZUNA_APP_ID
-        sync: false
-      - key: ADZUNA_APP_KEY
-        sync: false
-      - key: ADZUNA_COUNTRY
-        value: in
-      - key: JOOBLE_API_KEY
-        sync: false
-      - key: JSEARCH_RAPIDAPI_KEY
-        sync: false
-
-      # --- operator LLM keys: used ONLY for the cached demo job, never for users ---
-      # Set BOTH. Scoring and career-page extraction fail over from one provider
-      # to the next when a free tier is exhausted, and a chain of one is not a
-      # chain — with only Groq configured, its 100k tokens/day ends the run.
-      # Cerebras is deliberately absent: the key authenticates, but every model
-      # in its catalog returns 402 without billing.
-      - key: GROQ_API_KEY
-        sync: false
-      - key: GROQ_MODEL
-        value: llama-3.3-70b-versatile
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GEMINI_MODEL
-        # "-latest" alias, deliberately: gemini-2.5-flash was retired under us
-        # and started answering 404 "no longer available". Pinning an exact
-        # version means the deploy silently dies the day Google rotates it.
-        value: gemini-flash-latest
-
-      # How often the shared job pool refreshes. 60 = hourly.
-      - key: FETCH_INTERVAL_MINUTES
-        value: "60"
-
-      # --- career-page scraping ---
-      # These were missing from this blueprint entirely, so Render never prompted
-      # for them and the feature silently never ran in production: the career
-      # pages dashboard has produced zero jobs since launch.
-      #
-      # The scraper chain is Firecrawl -> Tavily -> Exa -> Jina. Jina needs no key,
-      # so scraping degrades rather than stopping once Firecrawl's 1,000 monthly
-      # credits are gone — but Firecrawl is much better, so set it.
-      #
-      # The URL list is config, not a secret, so it lives here: a fresh deploy
-      # then works without anyone remembering to paste it.
-      - key: FIRECRAWL_API_KEY
-        sync: false
-      - key: SCRAPE_INTERVAL_HOURS
-        value: "3"
-      - key: SCRAPE_MAX_PAGES_PER_RUN
-        value: "4"
-      - key: SCRAPE_CAREER_PAGES
-        value: "https://www.stackbinary.io/careers,https://www.ycombinator.com/jobs,https://unicoconnect.com/careers,https://www.cashfree.com/careers/,https://upstox.com/careers,https://snapmint.com/careers"
+      - key: PORT
+        value: "10000"
+      # REQUIRED - Add these in Render dashboard after first deploy:
+      # - GROQ_API_KEY (or NEMOTRON_API_KEY)
+      # - SESSION_SECRET (generate: openssl rand -hex 32)
+      # - KEY_ENCRYPTION_SECRET (generate: openssl rand -hex 32)
+      # - GOOGLE_CLIENT_ID
+      # - GOOGLE_CLIENT_SECRET
+      # - OAUTH_REDIRECT_URL (https://your-render-url.onrender.com/api/auth/google/callback)
+      # - FRONTEND_ORIGIN (https://your-vercel-app.vercel.app)
+      # OPTIONAL job APIs:
+      # - ADZUNA_APP_ID
+      # - ADZUNA_APP_KEY
+      # - JSEARCH_RAPIDAPI_KEY
+      # - ACTIVE_JOBS_RAPIDAPI_KEY
+      # - LINKEDIN_JOBS_RAPIDAPI_KEY
+      # - JOOBLE_API_KEY
+      # - FIRECRAWL_API_KEY
+      # - TAVILY_API_KEY
+      # - EXA_API_KEY
+      # - JINA_API_KEY
+    healthCheckPath: /api/health
+    autoDeploy: true
