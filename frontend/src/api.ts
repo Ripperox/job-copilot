@@ -111,6 +111,38 @@ export interface RescoreStatus {
 // Deliberately only in-flight, with no TTL: a stale cache after a fetch or a
 // status change would be a correctness bug, and this collapses the duplicates
 // without pretending to know when data went out of date.
+const TOKEN_KEY = 'jc_token'
+
+export function getStoredToken(): string | null {
+  try {
+    if (typeof window !== 'undefined' && window.location?.search) {
+      const params = new URLSearchParams(window.location.search)
+      const urlToken = params.get('token')
+      if (urlToken) {
+        localStorage.setItem(TOKEN_KEY, urlToken)
+        return urlToken
+      }
+    }
+    return localStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setStoredToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    /* ignore localStorage failures in private mode */
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getStoredToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 const inFlight = new Map<string, Promise<unknown>>()
 
 function dedupe<T>(key: string, run: () => Promise<T>): Promise<T> {
@@ -134,7 +166,7 @@ async function requestWithHeaders<T>(
 ): Promise<{ data: T; headers: Headers }> {
   return dedupe(`H:${path}`, async () => {
     const res = await fetch(`${API}${path}`, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       credentials: 'include',
     })
     if (res.status === 401) throw new UnauthorizedError()
@@ -154,10 +186,14 @@ async function requestWithHeaders<T>(
 
 async function rawRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+      ...init?.headers,
+    },
     // Sends and accepts the session cookie on cross-origin dev requests.
     credentials: 'include',
-    ...init,
   })
   if (res.status === 401) throw new UnauthorizedError()
   if (!res.ok) {
@@ -201,10 +237,12 @@ export function startGoogleLogin(): void {
 }
 
 export function logout(): Promise<{ ok: boolean }> {
+  setStoredToken(null)
   return request<{ ok: boolean }>('/auth/logout', { method: 'POST' })
 }
 
 export function deleteAccount(): Promise<{ ok: boolean }> {
+  setStoredToken(null)
   return request<{ ok: boolean }>('/auth/account', { method: 'DELETE' })
 }
 

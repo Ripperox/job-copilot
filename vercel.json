@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "https://job-copilot-api-ln71.onrender.com/api/:match*"
+    }
+  ]
+}

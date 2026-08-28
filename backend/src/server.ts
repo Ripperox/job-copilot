@@ -22,7 +22,7 @@ import * as health from './health';
 import * as usage from './usage';
 import { llmProviderChain } from './llm';
 import { buildAuthUrl, exchangeCodeForIdentity } from './auth/google';
-import { setSessionCookie, clearSessionCookie, sessionCookieOptions } from './auth/session';
+import { setSessionCookie, clearSessionCookie, sessionCookieOptions, signSession } from './auth/session';
 import { attachUser, requireAuth } from './auth/middleware';
 
 const app = express();
@@ -174,8 +174,9 @@ app.get('/api/auth/google/callback', async (req, res) => {
   try {
     const identity = await exchangeCodeForIdentity(code, config);
     const user = await db.upsertGoogleUser(identity.googleSub, identity.email, identity.name);
+    const token = signSession(user.id, config);
     setSessionCookie(res, user.id, config);
-    res.redirect(`${frontend}/?auth=ok`);
+    res.redirect(`${frontend}/?auth=ok&token=${encodeURIComponent(token)}`);
   } catch (e: any) {
     console.error('google callback failed:', e.message);
     res.redirect(`${frontend}/?auth=error`);

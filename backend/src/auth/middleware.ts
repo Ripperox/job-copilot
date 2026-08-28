@@ -13,9 +13,12 @@ declare global {
   }
 }
 
-// Attaches req.userId when a valid session cookie is present; never rejects.
+// Attaches req.userId when a valid session cookie or Bearer token is present; never rejects.
 export function attachUser(req: Request, _res: Response, next: NextFunction): void {
-  const userId = verifySession(req.cookies?.[SESSION_COOKIE]);
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined;
+  const token = bearerToken || req.cookies?.[SESSION_COOKIE];
+  const userId = verifySession(token);
   if (userId) req.userId = userId;
   next();
 }

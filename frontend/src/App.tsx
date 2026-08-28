@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import type { Health, User } from './api'
-import { API, getHealth, getJobs, getMe, logout } from './api'
+import { API, getHealth, getJobs, getMe, logout, setStoredToken } from './api'
 import ProfileView from './components/ProfileView'
 import Dashboard from './components/Dashboard'
 import SignIn from './components/SignIn'
@@ -113,13 +113,19 @@ export default function App() {
 
   const still = useReducedMotion()
 
-  // Read (and then clear) the ?auth= flag the backend redirect adds, so a failed
-  // sign-in explains itself and the query string does not linger in the URL.
+  // Read (and then clear) the ?auth= flag and ?token= the backend redirect adds, so a failed
+  // sign-in explains itself and the token is safely stashed in storage without lingering in the URL.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    const token = params.get('token')
+    if (token) {
+      setStoredToken(token)
+    }
     const flag = params.get('auth')
     if (flag) {
       if (AUTH_NOTICES[flag]) setNotice(AUTH_NOTICES[flag])
+    }
+    if (flag || token) {
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [])
@@ -169,6 +175,7 @@ export default function App() {
 
   // Any request can 401 if the session expires mid-session; drop back to sign-in.
   const onUnauthorized = useCallback(() => {
+    setStoredToken(null)
     setUser(null)
     setNotice('Your session expired. Please sign in again.')
   }, [])
