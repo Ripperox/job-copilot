@@ -7,3 +7,5 @@ data/
 *.log
 .angular/
 *.tsbuildinfo
+.vercel
+.env*
