@@ -1,4 +1,6 @@
 {
+  "rootDirectory": "frontend",
+  "framework": "vite",
   "rewrites": [
     {
       "source": "/api/:match*",
